@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const L = await import("./mod/logic.js");
-const doc = readFileSync(new URL("./fixtures/specs/PROJ-123/spec.md", import.meta.url), "utf8");
+const doc = readFileSync(new URL("../test/fixtures/specs/PROJ-123/spec.md", import.meta.url), "utf8");
 const segs = L.segments(doc);
 const starts = L.lineStarts(doc);
 

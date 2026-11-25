@@ -1,0 +1,16 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+
+const root = new URL("../", import.meta.url);
+
+test("mod.json: no place, focusable, palette entry 'specr: Open'", () => {
+  const m = JSON.parse(readFileSync(new URL("mods/specr/mod.json", root), "utf8"));
+  assert.equal(m.place, "none");
+  assert.equal(m.focusable, true);
+  assert.ok(m.palette.some((p) => p.title === "specr: Open"));
+});
+
+test("fixture spec lives under test/fixtures/specs/PROJ-123", () => {
+  assert.ok(existsSync(new URL("test/fixtures/specs/PROJ-123/spec.md", root)));
+});

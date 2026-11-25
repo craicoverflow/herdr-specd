@@ -1,0 +1,12 @@
+{
+  "name": "herdr-specr",
+  "private": true,
+  "description": "Herdr.app mod: review specs and plans, then dispatch their tasks",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/",
+    "check": "herdr-app check mods/specr",
+    "link": "bash scripts/link.sh",
+    "syntax": "bash scripts/syntax.sh"
+  }
+}
