@@ -1,0 +1,1 @@
+{"state":1,"id":"PROJ-456","adapter":"agent-skills","brief":"b","paths":{"spec":"specs/PROJ-456/spec.md"},"models":{"spec":"opus","plan":"opus","build":"sonnet"},"phase":"spec","status":"review","round":1,"owners":{},"pending":[],"dispatch":{"review":false,"created":{}}}

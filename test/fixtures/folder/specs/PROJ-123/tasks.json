@@ -1,0 +1,1 @@
+{"tasks":1,"spec":"PROJ-123","items":[{"id":"t1","kind":"task","title":"A","repo":"api","section":"Tasks","deps":[]},{"id":"t2","kind":"task","title":"B","repo":"api","section":"Tasks","deps":["t1"]}]}
