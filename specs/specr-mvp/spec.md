@@ -179,6 +179,21 @@ and dispatch it with specr.
 - With no spec selected, the pane lists the folder's specs (from `.specr/specs/*/state.json`):
   ID, title (the document's first heading), phase, pending comments, task count.
 
+**S11. Pick up specs written outside specr.** As the developer, a spec written by hand, or by an
+agent specr didn't start, shows up in specr without any hook.
+
+- specr watches the folder for files matching the adapter's spec path with `{id}` as a wildcard
+  (agent-skills: `specs/*/spec.md`). No other markdown is ever considered.
+- While a specr pane is open, a new match with no spec record appears in the spec list under
+  "Found" within 2 s, with one notification ("New spec found: PROJ-9"). Opening specr also
+  checks once, so specs written while it was closed are listed too.
+- **Adopt** registers it as in S2, with the adapter's paths for that ID and the phase its files
+  imply (spec only: "Spec · review"; with a plan: "Plan · review"). It has no owner agent.
+  Nothing is registered without this click.
+- **Dismiss** hides it for good (`.specr/dismissed.json`).
+- No Claude Code hook: it works with any agent, and with `/agent-skills:spec` run by hand when the
+  project's agent rules point it at specr's layout (open question 4).
+
 ### The review message
 
 ```text
@@ -329,7 +344,7 @@ or `all`. A checkpoint's prompt lists its checks instead.
 ```sh
 npm test                      # node --test test/        (core modules, fixtures)
 npm run check                 # herdr-app check ~/.config/herdr-app/mods/specr
-npm run link                  # sh scripts/link.sh: link mods/specr into ~/.config/herdr-app/mods/specr
+npm run link                  # sh scripts/link.sh: copy mods/specr into ~/.config/herdr-app/mods/specr
 npm run syntax                # node --check on every mods/specr/**/*.js
 herdr-app do specr.<command>  # drive a shown copy from a shell (dev commands: top, next-comment, shot-ready)
 herdr-app shot out/specr.png  # screenshot the window for visual checks
@@ -453,11 +468,14 @@ export function piece(view, p, t) {
    with the install note.
 8. S2: adopting `PROJ-9.md` leaves the file in place and reviews it like any other spec.
 9. `npm test` and `npm run check` pass.
+10. S11: with specr open, writing `specs/PROJ-9/spec.md` by hand lists it under Found within 2 s
+    with one notification; Adopt opens it in "Spec · review"; Dismiss survives a restart;
+    `SPEC.md` and `docs/notes.md` are never offered.
 
 ## Out of Scope (MVP)
 
 From the idea doc's Not Doing list: a separate Specs board tab, a second shipped adapter,
-parsing plan markdown, finding specs by scanning files, a Jira integration, phone review, a
+parsing plan markdown, finding specs anywhere but the adapter's spec path (S11), a Jira integration, phone review, a
 traceability matrix, worker-proposed spec amendments, editing or re-planning dispatched tasks,
 bundling a mermaid renderer, tracking worker state beyond reading Shepherdr, and multiple
 machines. Also: threads and replies on comments, suggested-change blocks, comments that span two
@@ -471,8 +489,6 @@ sections or a diagram.
   phase ends, and ignore a stray `todo.md`.
 - Opus writes a valid `tasks.json` from the prompt and schema. "Send to plan agent" covers
   misses.
-- A symlinked `~/.config/herdr-app/mods/specr` loads and hot-reloads like a copied folder (for
-  `npm run link`).
 - `hc send` delivers a multi-line review intact to Claude Code.
 
 ### Confirmed during planning (from Shepherdr 3.1.3's `herdr-task` source)
@@ -488,6 +504,8 @@ sections or a diagram.
   starts it at once, skipping its dependencies; `reopen` returns a queued task to `todo`.
 - Claude Code records the session's mode as `"permissionMode"` on each user entry of its
   transcript (`~/.claude/projects/<folder slug>/<session id>.jsonl`).
+- Herdr doesn't hot-reload a mod through a symlinked folder (found in Task 1), so
+  `npm run link` copies `mods/specr` instead; re-run it after each change.
 
 ## Open Questions
 

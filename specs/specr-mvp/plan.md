@@ -57,6 +57,7 @@ turns them into the product.
 - t9 · Task 9: Diagrams
 - t10 · Task 10: Adopt an existing spec
 - t11 · Task 11: Submit a review
+- t18 · Task 18: Pick up specs written outside specr
 - c2 · Checkpoint: Review loop
 
 ### Phase 3: Phases
@@ -346,12 +347,39 @@ owner or, when it's gone, to a new agent tab that becomes the owner; then saves 
 
 **Estimated scope:** Medium
 
+## Task 18: Pick up specs written outside specr
+
+**Description:** Spec S11. Watch the folder (`watchFolder`) for the adapter's spec path pattern,
+with `{id}` as a wildcard (agent-skills: `specs/*/spec.md`), and check once when the pane opens.
+Matches with no spec record appear in the spec list under "Found" with one notification each.
+Adopt registers them with the adapter's paths for that ID, reusing Task 10's adoption; Dismiss
+records them in `.specr/dismissed.json`. No other markdown is ever considered.
+
+**Acceptance criteria:**
+- [ ] With specr open, writing `specs/PROJ-9/spec.md` by hand lists `PROJ-9` under Found within 2 s, with exactly one notification.
+- [ ] Adopt opens it in "Spec · review" (with a `plan.md` beside it: "Plan · review"); Dismiss hides it across a restart.
+- [ ] `SPEC.md`, `docs/notes.md` and `specs/PROJ-9/notes.md` are never offered.
+
+**Verification:**
+- [ ] Tests pass: `node --test test/found.test.mjs` (pattern from the template, matching, dismissed filtering)
+- [ ] `npm run check`
+- [ ] Manual check: the three cases above in a scratch folder, `herdr-app shot`
+
+**Dependencies:** t11
+
+**Files likely touched:**
+- `mods/specr/core/found.js`, `test/found.test.mjs`
+- `mods/specr/ui/list.js`, `mods/specr/io/files.js`, `mods/specr/main.js`
+
+**Estimated scope:** Medium
+
 ## Checkpoint: Review loop
 
-Item `c2`, after t7 to t11:
+Item `c2`, after t7 to t11 and t18:
 - `npm test` and `npm run check` pass
 - Adopt a spec, comment on a paragraph, a table cell, two list items and text after a diagram, and Submit to a running agent: the agent receives one message with the right lines
 - The owner-gone path opens a new agent tab that receives the review
+- Writing `specs/PROJ-9/spec.md` by hand while specr is open offers it under Found, and Adopt opens it for review
 
 ## Task 12: New spec and the spec phase
 
@@ -513,7 +541,7 @@ herdr.dev/mods.
 | A GPUI quirk like the render-time `notify` | Medium | The no-work-in-`render()` rule; a dev command loop and `herdr-app shot` in every UI task |
 | Shepherdr's `herdr-task` changes shape | Medium | All calls live in `io/herdr-task.js`; argv is tested exactly; versions recorded in `test/e2e.md` |
 | Testing dispatch creates real Shepherdr tasks | Medium | Scratch repos only, removed after each run |
-| The symlinked mod doesn't hot-reload | Low | `link.sh` falls back to copying |
+| The symlinked mod doesn't hot-reload | Happened (Task 1) | `link.sh` copies; re-run `npm run link` after edits |
 | `mmdc` and Chrome are heavy for other people | Low | Optional; source plus install note without it |
 
 ## Open Questions
