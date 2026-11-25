@@ -9,5 +9,12 @@
       "args": { "mod": "specr", "name": "specr", "focus": true },
       "words": "spec review plan tasks"
     }
+    ,
+    {
+      "title": "specr: Adopt spec",
+      "command": "tab.new",
+      "args": { "mod": "specr", "name": "specr adopt", "focus": true, "props": { "adopt": true } },
+      "words": "adopt register existing spec plan tasks"
+    }
   ]
 }

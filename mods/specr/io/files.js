@@ -2,6 +2,7 @@
 import * as fs from "fs/promises";
 import { readTextFile, writeTextFile } from "herdr";
 import { parseState, prepareWrite, currentDocPath } from "../core/state.js";
+import { planAdoption } from "../core/adopt.js";
 import { summarize, sortSummaries } from "../core/summary.js";
 
 const join = (folder, rel) => (rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`);
@@ -58,4 +59,21 @@ export async function saveState(folder, state) {
   const path = `${specsDir(folder)}/${state.id}/state.json`;
   const existing = await read(path);
   await writeTextFile(path, prepareWrite(state, existing), existing);
+}
+
+/** IDs already taken in the folder: every directory under .specr/specs, readable or not. */
+export async function usedIds(folder) {
+  try {
+    return (await fs.exists(specsDir(folder))) ? await fs.readdir(specsDir(folder)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** S2: register picked files as a spec ({id, spec, plan?, tasks?}); returns the new state. Throws a message fit to show. */
+export async function adoptFiles(folder, { id, spec, plan, tasks }) {
+  const state = planAdoption({ folder, id, spec, plan, tasks, existingIds: await usedIds(folder) });
+  if (!(await read(spec))) throw new Error(`Can't read ${spec}.`);
+  await writeTextFile(`${specsDir(folder)}/${state.id}/state.json`, prepareWrite(state, null), null);
+  return state;
 }

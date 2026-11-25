@@ -4,7 +4,7 @@ import { v_flex, h_flex } from "gpui-base";
 
 const cell = (t, w, s, color) => div().w(w).flex_none().text_size(13).text_color(color ?? t.foreground).child(String(s));
 
-export function list({ t, specs, errors, onOpen }) {
+export function list({ t, specs, errors, onOpen, onAdopt }) {
   const head = h_flex().gap(12).px(12).py(6)
     .child(cell(t, 90, "ID", t.dim))
     .child(div().flex_1().min_w(0).text_size(12).text_color(t.dim).child("Title"))
@@ -21,7 +21,10 @@ export function list({ t, specs, errors, onOpen }) {
       .child(cell(t, 70, s.pending, s.pending ? t.working : t.muted))
       .child(cell(t, 50, s.tasks ?? "–", t.muted)));
   return v_flex().size_full().p(16).gap(4)
-    .child(div().text_lg().pb(8).child("Specs"))
+    .child(h_flex().items_center().pb(8)
+      .child(div().flex_1().text_lg().child("Specs"))
+      .child(div().id("adopt-spec").px(10).py(4).rounded(6).border_1().border_color(t.input).text_size(13).cursor_pointer()
+        .on_click((_e, cx) => onAdopt(cx)).child("Adopt spec…")))
     .child(specs.length ? head : div().text_size(13).text_color(t.muted).child("No specs in this folder yet."))
     .children(rows)
     .children(errors.map((e) => div().px(12).text_size(12).text_color(t.blocked).child(`${e.id}: ${e.message}`)));

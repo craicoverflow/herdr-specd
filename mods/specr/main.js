@@ -2,9 +2,11 @@
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { focused, spaces, props, theme, nextCommand, watchFolder, openOverlay, closeOverlay, checking } from "herdr";
+import { focused, spaces, props, theme, nextCommand, watchFolder, openOverlay, closeOverlay, checking, pickFiles } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, saveState, specsDir } from "./io/files.js";
+import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles } from "./io/files.js";
+import { suggestId } from "./core/adopt.js";
+import { adoptView } from "./ui/adopt.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
@@ -45,6 +47,10 @@ export default class Specr extends View {
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.editInput = InputState.new({ placeholder: "Edit the comment" });
     this.editInput.on("submit", (_e, cx) => this.saveEdit(cx));
+    this.adopting = props()?.adopt ? { spec: null, plan: null, tasks: null } : null; // the adopt form's picked files
+    this.adoptInput = InputState.new({ placeholder: "PROJ-9" });
+    this.adoptError = null;
+    this.adoptInput.on("submit", (_e, cx) => this.submitAdopt(cx));
     if (!this.folder) return;
 
     cx.spawn(async (cx) => {
@@ -219,6 +225,52 @@ export default class Specr extends View {
     });
   }
 
+  // ---- adopt (S2): handlers only ---------------------------------------------------------------
+
+  startAdopt(cx) {
+    this.adopting = { spec: null, plan: null, tasks: null };
+    this.adoptInput.set_value("");
+    this.adoptError = null;
+    cx.notify();
+  }
+
+  pickAdopt(key, cx) {
+    cx.spawn(async (cx) => {
+      const picked = await pickFiles({ prompt: { spec: "Choose the spec (markdown)", plan: "Choose the plan (markdown)", tasks: "Choose tasks.json" }[key] });
+      const path = picked?.[0];
+      if (path) {
+        this.adopting = { ...this.adopting, [key]: path };
+        // Prefill the ID from the spec's name, but never over what the person typed.
+        if (key === "spec" && !this.adoptInput.value().trim()) this.adoptInput.set_value(suggestId(path));
+        this.adoptError = null;
+      }
+      cx.notify();
+    });
+  }
+
+  clearAdopt(key, cx) {
+    this.adopting = { ...this.adopting, [key]: null };
+    cx.notify();
+  }
+
+  submitAdopt(cx) {
+    if (this.adoptBusy) return;
+    this.adoptBusy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const state = await adoptFiles(this.folder, { ...this.adopting, id: this.adoptInput.value() });
+        this.adopting = null;
+        this.adoptError = null;
+        await this.open(state.id);
+      } catch (e) {
+        this.adoptError = String(e?.message ?? e);
+      } finally {
+        this.adoptBusy = false;
+      }
+      cx.notify();
+    });
+  }
+
   async open(id) {
     this.selected = id;
     this.spec = null;
@@ -247,15 +299,25 @@ export default class Specr extends View {
       this.at = Math.min(this.at + 1, Math.max(0, this.pieces.length - 1));
       this.scroll.scroll_to_item(this.at);
     } else if (c === "back") await this.back();
+    else if (c === "adopt") {
+      this.adopting = { spec: null, plan: null, tasks: null };
+      this.adoptInput.set_value("");
+    }
   }
 
   render(_cx) {
     const t = theme();
     if (this.zoom) return zoomView({ t, pic: this.zoom, onClose: () => closeOverlay(props().overlay) });
     if (!this.folder) return div().size_full().p(16).bg(t.background).text_color(t.foreground).child("No folder: focus a terminal first");
+    if (this.adopting) {
+      return div().size_full().bg(t.background).text_color(t.foreground).child(
+        adoptView({ t, form: this.adopting, input: this.adoptInput, error: this.adoptError,
+          onPick: (k, cx) => this.pickAdopt(k, cx), onClear: (k, cx) => this.clearAdopt(k, cx),
+          onSubmit: (cx) => this.submitAdopt(cx), onCancel: (cx) => { this.adopting = null; this.adoptError = null; cx.notify(); } }));
+    }
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        list({ t, specs: this.specs, errors: this.errors, onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
+        list({ t, specs: this.specs, errors: this.errors, onAdopt: (cx) => this.startAdopt(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");
