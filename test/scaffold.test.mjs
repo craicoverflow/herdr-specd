@@ -14,3 +14,9 @@ test("mod.json: no place, focusable, palette entry 'specr: Open'", () => {
 test("fixture spec lives under test/fixtures/specs/PROJ-123", () => {
   assert.ok(existsSync(new URL("test/fixtures/specs/PROJ-123/spec.md", root)));
 });
+
+test("fixture folder has two specs with state.json", () => {
+  for (const id of ["PROJ-123", "PROJ-456"]) {
+    assert.ok(existsSync(new URL(`test/fixtures/folder/.specr/specs/${id}/state.json`, root)));
+  }
+});
