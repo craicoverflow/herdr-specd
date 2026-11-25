@@ -1,0 +1,6 @@
+flowchart LR
+  A[Spec drafted by Opus] --> B{Reviewed?}
+  B -- comments --> A
+  B -- approved --> C[Plan + tasks.json]
+  C --> D[herdr-task add x N]
+  D --> E[(Sonnet workers in worktrees)]

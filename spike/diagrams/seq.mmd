@@ -1,0 +1,8 @@
+sequenceDiagram
+  participant You
+  participant specr
+  participant Opus
+  You->>specr: Submit review (3 comments)
+  specr->>Opus: hc send <batched review>
+  Opus-->>specr: spec.md v2
+  specr-->>You: Changes since your last review

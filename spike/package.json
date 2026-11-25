@@ -1,0 +1,12 @@
+{
+  "name": "herdr-specr-spike",
+  "private": true,
+  "description": "Throwaway spike: mermaid rendering + markdown selection comments in a Herdr.app mod",
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "12.2.0"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node logic.test.mjs"
+  }
+}
