@@ -1,0 +1,12 @@
+{
+  "adapter": 1,
+  "id": "kiro",
+  "name": "Kiro",
+  "paths": { "spec": ".kiro/specs/{id}/requirements.md", "plan": ".kiro/specs/{id}/design.md", "tasks": ".kiro/specs/{id}/tasks.json" },
+  "agent": { "argv": ["kiro-cli", "chat", "--model", "{model}"] },
+  "phases": {
+    "spec": { "model": "claude-opus", "prompt": "Write requirements for: {brief}\n\n{specr.spec}" },
+    "plan": { "model": "claude-opus", "prompt": "Write the design and task list.\n\n{specr.plan}" },
+    "build": { "model": "claude-sonnet", "prompt": "Implement the task.\n\n{specr.task}" }
+  }
+}

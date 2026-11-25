@@ -1,0 +1,12 @@
+{
+  "adapter": 1,
+  "id": "spec-kit",
+  "name": "GitHub spec-kit",
+  "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/tasks.json" },
+  "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}"] },
+  "phases": {
+    "spec": { "model": "opus", "effort": "high", "prompt": "/speckit.specify {brief}\n\n{specr.spec}" },
+    "plan": { "model": "opus", "effort": "high", "prompt": "/speckit.plan\n\n{specr.plan}" },
+    "build": { "agent": "claude", "model": "sonnet", "effort": "medium", "prompt": "Implement with /speckit.implement.\n\n{specr.task}" }
+  }
+}
