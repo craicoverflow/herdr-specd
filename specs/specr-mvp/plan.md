@@ -30,6 +30,8 @@ turns them into the product.
   to a terminal; `hc send` delivers reviews.
 - **Dispatch is `add --json` then `start`.** Refs passed to `--after` only ever come from `add`'s
   output.
+- **Workers inherit auto mode from the plan agent.** Phase agents start with `--session-id`, so
+  specr can read their mode from the transcript and pass `start --argv … --permission-mode auto`.
 - **Proposed answers to the spec's open questions** (confirm in review):
   - Q1: machine settings (`mmdc` path, puppeteer config) in the mod's `localStorage`, edited from
     a small settings popover; default is `mmdc` on `PATH`.
@@ -176,11 +178,14 @@ while comments are pending), spec → plan → build → done, owner per phase, 
 **Description:** `core/tasks.js`: validate `tasks.json` version 1 against every rule in the spec
 (all errors at once, plus the `Source spec:` warning or error); order items by dependency; extract
 a task's section from `plan.md` by heading text; build each item's prompt file text and its
-`herdr-task add` and `start` argv arrays; plan a retry from the refs already created.
+`herdr-task add` and `start` argv arrays (`start` gets `--argv <worker argv ending in
+--permission-mode auto>` only when told the parent is in auto mode); read a Claude transcript's
+latest `permissionMode`; plan a retry from the refs already created.
 
 **Acceptance criteria:**
 - [ ] One broken fixture per validation rule, each reporting exactly its error; a fixture with a cycle and an unknown repo reports both.
-- [ ] The argv for a task, a checkpoint, `--after` with refs from two folders, and the review toggle match expected arrays exactly.
+- [ ] The argv for a task, a checkpoint, `--after` with refs from two folders, the review toggle, and a parent in auto mode (and in another mode) match expected arrays exactly.
+- [ ] The transcript reader returns the latest `permissionMode` from a fixture `.jsonl`, and nothing for a missing file.
 - [ ] A retry plan after a partial dispatch includes only uncreated items and created-but-unstarted ones.
 
 **Verification:**
@@ -319,7 +324,8 @@ the files where they are, in the phase they imply.
 ## Task 11: Submit a review
 
 **Description:** `io/agents.js` starts a phase agent tab (`tab.new` with the adapter's argv and a
-first message, named `<ID> <phase>`), finds its terminal through `panes()`, and checks whether an
+first message, named `<ID> <phase>`, with a fresh `--session-id <uuid>` recorded on the owner so
+its transcript can be found later), finds its terminal through `panes()`, and checks whether an
 owner's terminal still exists. Submit builds the review message, sends it with `hc send` to the
 owner or, when it's gone, to a new agent tab that becomes the owner; then saves the round
 (`rounds/<n>/` with the file and `review.json`) and clears the pending comments.
@@ -432,10 +438,11 @@ order, records refs, then `herdr-task start` for each; flag any item whose retur
 - [ ] A `tasks.json` with a cycle and an unknown repo shows both errors and creates no tasks.
 - [ ] A valid two-repo file with a checkpoint creates every item titled `DEMO-1 · …` with the right `--folder`, `--after` and `--model` (`herdr-task list --json`), and the checkpoint waits on its tasks.
 - [ ] After a forced failure, running dispatch again creates only the missing items.
+- [ ] With the plan agent in auto mode, every item's stored `queue.argv` ends in `--permission-mode auto`; with it in another mode, Shepherdr's Settings decide.
 
 **Verification:**
 - [ ] `npm test && npm run check`
-- [ ] Manual check: two scratch repos; `herdr-task list --json --folder <repo>` for each; remove the scratch tasks afterwards
+- [ ] Manual check: two scratch repos; `herdr-task list --json --folder <repo>` for each; `herdr-task show <ref> --json` for `queue.argv`; remove the scratch tasks afterwards
 
 **Dependencies:** c3
 

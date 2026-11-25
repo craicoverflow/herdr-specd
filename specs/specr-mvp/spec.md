@@ -140,6 +140,13 @@ and dispatch it with specr.
   returned `ref` (e.g. `API-14`) in `state.json`. Titles are `<ID> · <title>`. A new task is
   `todo` and doesn't run, so specr then runs `herdr-task start <ref>` for each item: items whose
   dependencies aren't done become `queued` and start by themselves.
+- **Workers inherit auto mode from their parent.** The parent is the plan's owner agent. When its
+  Claude Code session is in auto mode at Confirm (the `permissionMode` of the latest user entry
+  in its session transcript, found through the `--session-id` specr started it with), specr starts
+  each item with `herdr-task start <ref> --argv <worker argv ending in --permission-mode auto>`.
+  Otherwise, or when the parent is unknown (an adopted plan), Shepherdr's Settings decide. Only
+  `auto` is inherited, never `bypassPermissions` or any other mode. Shepherdr stores this argv in
+  the queued task, so it holds even if Settings change before the task starts.
 - After dispatch, any item whose returned `mode` is `here` (the person turned worktrees off for
   that repo, which overrides `--worktree`) is flagged in the summary.
 - Each checkpoint becomes a task that depends on the tasks it follows; tasks after it depend on
@@ -205,7 +212,7 @@ adapters never repeat them.
   "id": "agent-skills",
   "name": "agent-skills (Addy Osmani)",
   "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/tasks.json" },
-  "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}"] },
+  "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}", "--session-id", "{session}"] },
   "phases": {
     "spec":  { "model": "opus", "effort": "high", "prompt": "/agent-skills:spec {brief}\n\n{specr.spec}" },
     "plan":  { "model": "opus", "effort": "high", "prompt": "/agent-skills:plan\n\n{specr.plan}" },
@@ -249,7 +256,7 @@ same prompts; there they are plain instructions rather than a rule the skill alr
   "phase": "spec",                // spec | plan | build | done
   "status": "review",             // drafting | review | approved
   "round": 2,                     // next round to submit, per phase document
-  "owners": { "spec": { "terminal": "t7", "tab": "tb…", "at": 1795641850161 } },
+  "owners": { "spec": { "terminal": "t7", "tab": "tb…", "session": "<uuid passed as --session-id>", "at": 1795641850161 } },
   "pending": [ { "start": 2411, "end": 2476, "lines": [42, 44], "quote": "…", "body": "…" } ],
   "dispatch": { "review": false, "created": { "t1": "API-14", "c1": "API-15" } }
 }
@@ -295,6 +302,7 @@ herdr-task add "<ID> · <title>" --json
   [--after <Shepherdr IDs of deps, comma-separated>]
   [--finish-notes "<adapter review finishNotes>"]      # only with the review toggle on
 herdr-task start <ref> --folder <abs repo>             # after all adds succeed; queued until deps are done
+  [--argv '["claude","--model","<m>","--effort","<e>","--permission-mode","auto"]']   # only when the parent is in auto mode
 ```
 
 The prompt file holds the adapter's build prompt with `{specr.task}` filled in: the spec and plan
@@ -439,7 +447,8 @@ export function piece(view, p, t) {
 6. S7: a `tasks.json` with a cycle and an unknown repo shows both errors and creates no tasks. A
    valid two-repo file with one checkpoint creates every item with the right `--folder`, `--after`
    and `--model`, titled `DEMO-1 · …`. Re-running after a forced failure creates only the
-   missing items.
+   missing items. With the plan agent in auto mode, every item's stored `queue.argv` ends in
+   `--permission-mode auto`; with it in another mode, none does.
 7. S8: both fixture diagrams render in dark and light; with `mmdc` off `PATH` they show as source
    with the install note.
 8. S2: adopting `PROJ-9.md` leaves the file in place and reviews it like any other spec.
@@ -473,6 +482,12 @@ sections or a diagram.
 - `--after` accepts full refs for the same folder and for other folders; an unknown ref in another
   folder blocks nothing.
 - `start` on a task with unfinished dependencies queues it; queued tasks start by themselves.
+- `start --argv <json>` stores that argv in the queued task (`queue.argv`) and the scheduler
+  starts it with exactly that later; without `--argv`, Settings' worker argv is stored at that
+  moment, so later Settings changes don't reach queued tasks. `start` on an already queued task
+  starts it at once, skipping its dependencies; `reopen` returns a queued task to `todo`.
+- Claude Code records the session's mode as `"permissionMode"` on each user entry of its
+  transcript (`~/.claude/projects/<folder slug>/<session id>.jsonl`).
 
 ## Open Questions
 
