@@ -89,3 +89,27 @@ test("selectionAnchor rejects an empty or non round-tripping range", () => {
   const ps = pieces(doc);
   assert.equal(selectionAnchor(doc, lineStarts(doc), ps[0], { start: 3, end: 3 }).ok, false);
 });
+
+// The four selections from the acceptance criteria, on the PROJ-123 fixture spec: the reported
+// lines must hold the selected text, as `sed -n '<a>,<b>p'` shows it.
+import { readFileSync } from "node:fs";
+const big = readFileSync(new URL("fixtures/specs/PROJ-123/spec.md", import.meta.url), "utf8");
+const cases = {
+  "a paragraph": "Rendering a diagram takes about a second once the browser is warm",
+  "a table cell": "A source range `[start, end)` in UTF-16 offsets",
+  "two list items": "a comment whose text is found keeps its place, moved to the new offsets;\n- a comment whose text is gone",
+  "text after a diagram": "send comments one at a time",
+};
+for (const [name, needle] of Object.entries(cases)) {
+  test(`selection in ${name}: lines match sed -n`, () => {
+    const ps = pieces(big);
+    const at = big.indexOf(needle);
+    assert.ok(at >= 0, "needle is in the fixture");
+    const p = ps[pieceIndexAt(ps, at)];
+    const r = selectionAnchor(big, lineStarts(big), p, { start: at - p.start, end: at - p.start + needle.length });
+    assert.equal(r.ok, true);
+    const sed = big.split("\n").slice(r.lines[0] - 1, r.lines[1]).join("\n");
+    assert.ok(sed.includes(needle), `lines ${r.lines} contain the selection`);
+    assert.ok(r.lines[0] === r.lines[1] || needle.includes("\n"));
+  });
+}
