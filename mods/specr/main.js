@@ -1,10 +1,12 @@
 // specr: review specs and plans, then dispatch their tasks.
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
-import { ScrollHandle } from "gpui-base";
+import { ScrollHandle, InputState } from "gpui-base";
 import { focused, spaces, props, theme, nextCommand, watchFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, specsDir } from "./io/files.js";
+import { loadSpecs, loadSpec, saveState, specsDir } from "./io/files.js";
+import { lineStarts } from "./core/anchors.js";
+import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
 import { documentView } from "./ui/document.js";
 
@@ -24,6 +26,13 @@ export default class Specr extends View {
     this.error = null;
     this.scroll = ScrollHandle.new();
     this.at = 0; // piece index for the `next` dev command
+    this.sel = null; // the last settled selection as an anchor (ok) or { ok: false, reason }
+    this.editing = null; // index of the pending comment being edited
+    this.noteError = null;
+    this.input = InputState.new({ placeholder: "Comment on the selection" });
+    this.input.on("submit", (_e, cx) => this.add(cx));
+    this.editInput = InputState.new({ placeholder: "Edit the comment" });
+    this.editInput.on("submit", (_e, cx) => this.saveEdit(cx));
     if (!this.folder) return;
 
     cx.spawn(async (cx) => {
@@ -62,7 +71,7 @@ export default class Specr extends View {
 
   // Reads the folder again; true when something changed (so the caller notifies).
   async reload() {
-    if (this.busy) return false;
+    if (this.busy || this.saving) return false;
     this.busy = true;
     try {
       let changed = false;
@@ -93,12 +102,93 @@ export default class Specr extends View {
     }
   }
 
+  // ---- comments: handlers run from events, never from render() ---------------------------------
+
+  onSelect(i, selection, cx) {
+    if (!selection) return; // keep the last selection: clicking the comment box clears it
+    this.sel = selectionAnchor(this.spec.doc, this.starts(), this.pieces[i], selection.range);
+    if (this.sel.ok) this.input.focus();
+    cx.notify();
+  }
+
+  starts() {
+    if (this.startsDoc !== this.spec.doc) {
+      this.startsDoc = this.spec.doc;
+      this.startsCache = lineStarts(this.spec.doc);
+    }
+    return this.startsCache;
+  }
+
+  add(cx) {
+    if (!this.sel?.ok) return;
+    this.change(cx, (s) => addComment(s, this.sel, this.input.value()), () => {
+      this.input.set_value("");
+      this.sel = null;
+    });
+  }
+
+  edit(i, cx) {
+    this.editing = i;
+    this.editInput.set_value(this.spec.state.pending[i].body);
+    this.editInput.focus();
+    cx.notify();
+  }
+
+  saveEdit(cx) {
+    if (this.editing == null) return;
+    const i = this.editing;
+    this.change(cx, (s) => editComment(s, i, this.editInput.value()), () => { this.editing = null; });
+  }
+
+  remove(i, cx) {
+    this.change(cx, (s) => removeComment(s, i), () => { this.editing = null; });
+  }
+
+  jump(i, cx) {
+    const at = pieceIndexAt(this.pieces, this.spec.state.pending[i].start);
+    if (at >= 0) this.scroll.scroll_to_item(at);
+    cx.notify();
+  }
+
+  // Apply a pure state change, show it at once, and save it. A refused change shows its reason;
+  // a failed save puts the on-disk state back so the panel never shows what isn't saved.
+  change(cx, fn, after) {
+    let next;
+    try {
+      next = fn(this.spec.state);
+    } catch (e) {
+      this.noteError = String(e.message);
+      cx.notify();
+      return;
+    }
+    const prev = this.spec.state;
+    this.spec = { ...this.spec, state: next };
+    this.noteError = null;
+    after();
+    cx.notify();
+    this.saving = true;
+    cx.spawn(async (cx) => {
+      try {
+        await saveState(this.folder, next);
+      } catch (e) {
+        this.spec = { ...this.spec, state: prev };
+        this.noteError = `Couldn't save the comments: ${e.message ?? e}`;
+      } finally {
+        this.saving = false;
+      }
+      cx.notify();
+    });
+  }
+
   async open(id) {
     this.selected = id;
     this.spec = null;
     this.pieces = [];
     this.error = null;
     this.at = 0;
+    this.sel = null;
+    this.editing = null;
+    this.noteError = null;
     await this.reload();
   }
 
@@ -132,6 +222,9 @@ export default class Specr extends View {
     }
     return div().size_full().bg(t.background).text_color(t.foreground).child(
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,
+        comments: { sel: this.sel, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
+          onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
+          onRemove: (i, cx) => this.remove(i, cx), onJump: (i, cx) => this.jump(i, cx) },
         onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }) }));
   }
 }

@@ -1,7 +1,7 @@
 // Reading spec state and documents from a folder. Effects live here; the logic is in core/.
 import * as fs from "fs/promises";
-import { readTextFile } from "herdr";
-import { parseState, currentDocPath } from "../core/state.js";
+import { readTextFile, writeTextFile } from "herdr";
+import { parseState, prepareWrite, currentDocPath } from "../core/state.js";
 import { summarize, sortSummaries } from "../core/summary.js";
 
 const join = (folder, rel) => (rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`);
@@ -51,4 +51,11 @@ export async function loadSpec(folder, id) {
   const rel = currentDocPath(state) ?? state.paths?.spec ?? null;
   const path = rel ? join(folder, rel) : null;
   return { state, path, doc: path ? await read(path) : null };
+}
+
+/** Save a spec's state.json. Refuses (throws) when the file changed on disk since it was read here. */
+export async function saveState(folder, state) {
+  const path = `${specsDir(folder)}/${state.id}/state.json`;
+  const existing = await read(path);
+  await writeTextFile(path, prepareWrite(state, existing), existing);
 }

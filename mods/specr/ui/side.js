@@ -1,0 +1,45 @@
+// The comment side panel: selection and comment box, then the pending comments. Elements only.
+import { div } from "gpui-kit";
+import { v_flex, h_flex, Input } from "gpui-base";
+
+const range = (lines) => (lines[0] === lines[1] ? `Line ${lines[0]}` : `Lines ${lines[0]}-${lines[1]}`);
+const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+const box = (t, state) => div().w_full().rounded(6).border_1().border_color(t.input).bg(t.background).child(Input.new(state));
+const link = (t, id, label, onClick, hoverColor) =>
+  div().id(id).text_size(12).text_color(t.muted).cursor_pointer().hover((e) => e.text_color(hoverColor ?? t.foreground))
+    .on_click((_e, cx) => onClick(cx)).child(label);
+
+function selection({ t, sel, input }) {
+  if (!sel) return div().text_size(13).text_color(t.muted).whitespace_normal().child("Select text in the document to comment on it.");
+  if (!sel.ok) return div().text_size(13).text_color(t.blocked).whitespace_normal().child(sel.reason);
+  return v_flex().gap(6)
+    .child(div().text_size(13).font_semibold().child(range(sel.lines)))
+    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(clip(sel.quote, 160)))
+    .child(box(t, input))
+    .child(div().text_size(11).text_color(t.dim).child("Enter adds the comment"));
+}
+
+function card({ t, c, i, editing, editInput, onJump, onEdit, onRemove }) {
+  const head = h_flex().justify_between().gap(8)
+    .child(div().id(`jump-${i}`).text_size(12).font_semibold().cursor_pointer().on_click((_e, cx) => onJump(i, cx)).child(range(c.lines)))
+    .child(h_flex().gap(10)
+      .child(link(t, `edit-${i}`, "edit", (cx) => onEdit(i, cx)))
+      .child(link(t, `rm-${i}`, "remove", (cx) => onRemove(i, cx), t.blocked)));
+  return v_flex().gap(4).p(8).rounded(6).bg(t.background).border_1().border_color(t.border)
+    .child(head)
+    .child(div().text_size(12).text_color(t.dim).whitespace_normal().child(`> ${clip(c.quote.split("\n")[0], 80)}`))
+    .child(editing === i
+      ? v_flex().gap(4).child(box(t, editInput)).child(div().text_size(11).text_color(t.dim).child("Enter saves"))
+      : div().text_size(13).whitespace_normal().child(c.body));
+}
+
+export function sidePanel(p) {
+  const { t, pending, error } = p;
+  const label = (s) => div().text_size(11).font_semibold().text_color(t.dim).child(s.toUpperCase());
+  return v_flex().id("side").w(300).flex_none().h_full().overflow_y_scrollbar().border_l_1().border_color(t.border).bg(t.surface).p(14).gap(12)
+    .child(label("Selection"))
+    .child(selection({ t, sel: p.sel, input: p.input }))
+    .child(label(`Pending comments · ${pending.length}`))
+    .children(pending.length ? pending.map((c, i) => card({ ...p, c, i })) : [div().text_size(13).text_color(t.muted).child("None yet.")])
+    .children(error ? [div().text_size(12).text_color(t.blocked).whitespace_normal().child(error)] : []);
+}
