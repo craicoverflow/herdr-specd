@@ -180,19 +180,30 @@ and dispatch it with specr.
   ID, title (the document's first heading), phase, pending comments, task count.
 
 **S11. Pick up specs written outside specr.** As the developer, a spec written by hand, or by an
-agent specr didn't start, shows up in specr without any hook.
+agent specr didn't start, shows up in specr without any hook: both in specr's layout and where
+the framework itself puts specs.
 
-- specr watches the folder for files matching the adapter's spec path with `{id}` as a wildcard
-  (agent-skills: `specs/*/spec.md`). No other markdown is ever considered.
+- specr watches the folder for two kinds of path, with `{id}` as a wildcard:
+  - specr's own layout, the adapter's `paths.spec` (agent-skills: `specs/{id}/spec.md`);
+  - the framework's own spec locations, the adapter's `discover.specs` (agent-skills, from
+    `/agent-skills:build auto`'s known paths: `SPEC.md`, `SPEC-{id}.md`, `docs/SPEC.md`,
+    `spec/{id}.md`).
+
+  No other markdown is ever considered. A spec the skill saves somewhere else (when it starts
+  on its own and picks a path) is adopted by hand (S2).
 - While a specr pane is open, a new match with no spec record appears in the spec list under
-  "Found" within 2 s, with one notification ("New spec found: PROJ-9"). Opening specr also
+  "Found" within 2 s, with one notification ("New spec found: SPEC-auth.md"). Opening specr also
   checks once, so specs written while it was closed are listed too.
-- **Adopt** registers it as in S2, with the adapter's paths for that ID and the phase its files
-  imply (spec only: "Spec · review"; with a plan: "Plan · review"). It has no owner agent.
-  Nothing is registered without this click.
-- **Dismiss** hides it for good (`.specr/dismissed.json`).
-- No Claude Code hook: it works with any agent, and with `/agent-skills:spec` run by hand when the
-  project's agent rules point it at specr's layout (open question 4).
+- **Adopt** registers it as in S2: the file stays where it is, with no owner agent. The ID comes
+  from `{id}` when the path has one (`SPEC-auth.md` → `auth`); otherwise (`SPEC.md`,
+  `docs/SPEC.md`) Adopt asks for it, prefilled with a Jira-style key from the first heading if it
+  has one, else a slug of that heading. A plan at one of the adapter's `discover.plans` paths
+  (agent-skills: `tasks/plan.md`) is attached only when its `Source spec:` line names this file;
+  then the spec starts in "Plan · review", otherwise in "Spec · review". Nothing is registered
+  without this click.
+- **Dismiss** hides that file path for good (`.specr/dismissed.json`); paths, not IDs, since
+  `SPEC.md` has none.
+- No Claude Code hook: it works with any agent.
 
 ### The review message
 
@@ -227,6 +238,8 @@ adapters never repeat them.
   "id": "agent-skills",
   "name": "agent-skills (Addy Osmani)",
   "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/tasks.json" },
+  // Where the framework itself puts specs and plans, for S11. Optional; {id} is a wildcard.
+  "discover": { "specs": ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md"], "plans": ["tasks/plan.md"] },
   "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}", "--session-id", "{session}"] },
   "phases": {
     "spec":  { "model": "opus", "effort": "high", "prompt": "/agent-skills:spec {brief}\n\n{specr.spec}" },
@@ -248,7 +261,7 @@ extension point the skills already define, not by fighting their defaults:
 
 | Command | Its default | specr's prompt |
 | --- | --- | --- |
-| `/agent-skills:spec` | Saves `SPEC.md` at the root; if one exists, writes a delta `SPEC-<slug>.md` | Names specr as the project's spec system (the skill's "External spec tools" rule) and gives the path. A delta spec is fine, written at that path |
+| `/agent-skills:spec` | Saves `SPEC.md` at the root; if one exists, writes a delta `SPEC-<slug>.md` | Names specr as the project's spec system (the skill's "External spec tools" rule) and gives the path. A delta spec is fine, written at that path. Run by hand, outside specr, its files are found by S11 |
 | `/agent-skills:plan` | Writes `tasks/plan.md` and `tasks/todo.md`; stops if they hold another plan's unchecked tasks | Names specr's `tasks.json` as the task list target (the "external tracker" rule): no `todo.md`, the plan at the spec folder's path, a `Source spec:` line |
 | `/agent-skills:build` | Picks the next pending task and marks it complete | Names one task; forbids marking anything complete (parallel workers ticking the same checklist would conflict on merge) |
 | `/agent-skills:build` | Its argument `auto` or `all` builds the whole plan | The text after the command never starts with `auto` or `all` |
@@ -468,9 +481,11 @@ export function piece(view, p, t) {
    with the install note.
 8. S2: adopting `PROJ-9.md` leaves the file in place and reviews it like any other spec.
 9. `npm test` and `npm run check` pass.
-10. S11: with specr open, writing `specs/PROJ-9/spec.md` by hand lists it under Found within 2 s
-    with one notification; Adopt opens it in "Spec · review"; Dismiss survives a restart;
-    `SPEC.md` and `docs/notes.md` are never offered.
+10. S11: with specr open, each of `specs/PROJ-9/spec.md`, `SPEC.md` and `SPEC-auth.md` written by
+    hand is listed under Found within 2 s with one notification. Adopt opens it for review with
+    the ID `PROJ-9`, the one typed for `SPEC.md`, and `auth`; a `tasks/plan.md` whose `Source
+    spec:` names `SPEC.md` is attached to it. Dismiss survives a restart. `docs/notes.md` and
+    `specs/PROJ-9/notes.md` are never offered.
 
 ## Out of Scope (MVP)
 

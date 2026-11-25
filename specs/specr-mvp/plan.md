@@ -57,6 +57,7 @@ turns them into the product.
 - t9 · Task 9: Diagrams
 - t10 · Task 10: Adopt an existing spec
 - t11 · Task 11: Submit a review
+- t19 · Task 19: Spec locations in adapters
 - t18 · Task 18: Pick up specs written outside specr
 - c2 · Checkpoint: Review loop
 
@@ -347,39 +348,65 @@ owner or, when it's gone, to a new agent tab that becomes the owner; then saves 
 
 **Estimated scope:** Medium
 
-## Task 18: Pick up specs written outside specr
+## Task 19: Spec locations in adapters
 
-**Description:** Spec S11. Watch the folder (`watchFolder`) for the adapter's spec path pattern,
-with `{id}` as a wildcard (agent-skills: `specs/*/spec.md`), and check once when the pane opens.
-Matches with no spec record appear in the spec list under "Found" with one notification each.
-Adopt registers them with the adapter's paths for that ID, reusing Task 10's adoption; Dismiss
-records them in `.specr/dismissed.json`. No other markdown is ever considered.
+**Description:** The pure half of spec S11. Add the optional `discover` field to adapter version 1
+(`discover.specs` and `discover.plans`: path patterns with `{id}` as a wildcard) to
+`core/adapters.js`'s validation, and fill it in `adapters/agent-skills.json` (`SPEC.md`,
+`SPEC-{id}.md`, `docs/SPEC.md`, `spec/{id}.md`; plans: `tasks/plan.md`). New `core/found.js`:
+turn the adapter's `paths.spec` plus `discover.specs` into matchers; given a file list, the
+recorded spec paths and the dismissed paths, return the found specs (path, ID from `{id}` or
+null); suggest an ID for a spec without one (a Jira-style key from its first heading, else a slug
+of the heading); pick the plan to attach (a `discover.plans` file whose `Source spec:` line names
+the spec's path).
 
 **Acceptance criteria:**
-- [ ] With specr open, writing `specs/PROJ-9/spec.md` by hand lists `PROJ-9` under Found within 2 s, with exactly one notification.
-- [ ] Adopt opens it in "Spec · review" (with a `plan.md` beside it: "Plan · review"); Dismiss hides it across a restart.
-- [ ] `SPEC.md`, `docs/notes.md` and `specs/PROJ-9/notes.md` are never offered.
+- [ ] `specs/PROJ-9/spec.md`, `SPEC.md`, `SPEC-auth.md`, `docs/SPEC.md` and `spec/billing.md` are found with IDs `PROJ-9`, null, `auth`, null, `billing`; `docs/notes.md`, `specs/PROJ-9/notes.md` and recorded or dismissed paths are not.
+- [ ] The ID suggestion gives `PROJ-123` for `# PROJ-123: Login` and `login-flow` for `# Spec: Login flow`.
+- [ ] A `tasks/plan.md` is attached only when its `Source spec:` names the spec; adapters without `discover` still load.
 
 **Verification:**
-- [ ] Tests pass: `node --test test/found.test.mjs` (pattern from the template, matching, dismissed filtering)
-- [ ] `npm run check`
-- [ ] Manual check: the three cases above in a scratch folder, `herdr-app shot`
+- [ ] Tests pass: `node --test test/found.test.mjs test/adapters.test.mjs`
 
-**Dependencies:** t11
+**Dependencies:** t3
 
 **Files likely touched:**
-- `mods/specr/core/found.js`, `test/found.test.mjs`
-- `mods/specr/ui/list.js`, `mods/specr/io/files.js`, `mods/specr/main.js`
+- `mods/specr/core/found.js`, `mods/specr/core/adapters.js`, `mods/specr/adapters/agent-skills.json`
+- `test/found.test.mjs`, `test/adapters.test.mjs`
+
+**Estimated scope:** Small
+
+## Task 18: Pick up specs written outside specr
+
+**Description:** The UI half of spec S11, on Task 19's `core/found.js`. Watch the folder
+(`watchFolder`) while the pane is open and check once when it opens. Found specs appear in the
+spec list under "Found" with one notification each. Adopt reuses Task 10's adoption: the ID from
+the path, or asked for (prefilled with the suggestion) for `SPEC.md` and `docs/SPEC.md`; the
+matching plan attached. Dismiss records the path in `.specr/dismissed.json`.
+
+**Acceptance criteria:**
+- [ ] With specr open, writing `specs/PROJ-9/spec.md`, `SPEC.md` and `SPEC-auth.md` by hand lists each under Found within 2 s, with exactly one notification each.
+- [ ] Adopting `SPEC.md` asks for its ID, prefilled from its heading, and attaches a `tasks/plan.md` whose `Source spec:` names it ("Plan · review"); Dismiss hides a path across a restart.
+- [ ] `docs/notes.md` and `specs/PROJ-9/notes.md` are never offered.
+
+**Verification:**
+- [ ] `npm test && npm run check`
+- [ ] Manual check: the cases above in a scratch folder, `herdr-app shot`
+
+**Dependencies:** t11, t19
+
+**Files likely touched:**
+- `mods/specr/ui/list.js`, `mods/specr/ui/adopt.js`, `mods/specr/io/files.js`, `mods/specr/main.js`
 
 **Estimated scope:** Medium
 
 ## Checkpoint: Review loop
 
-Item `c2`, after t7 to t11 and t18:
+Item `c2`, after t7 to t11, t19 and t18:
 - `npm test` and `npm run check` pass
 - Adopt a spec, comment on a paragraph, a table cell, two list items and text after a diagram, and Submit to a running agent: the agent receives one message with the right lines
 - The owner-gone path opens a new agent tab that receives the review
-- Writing `specs/PROJ-9/spec.md` by hand while specr is open offers it under Found, and Adopt opens it for review
+- Writing `specs/PROJ-9/spec.md` and `SPEC.md` by hand while specr is open offers both under Found, and Adopt opens each for review
 
 ## Task 12: New spec and the spec phase
 
