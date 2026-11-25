@@ -2,14 +2,15 @@
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { focused, spaces, props, theme, nextCommand, watchFolder, openOverlay, closeOverlay, checking, pickFiles } from "herdr";
+import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, notify, openOverlay, closeOverlay, checking, pickFiles } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles, saveRound } from "./io/files.js";
-import { adapterFor, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
+import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
+import { adapterFor, defaultAdapter, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
 import { submitReview, setOwner } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
+import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
@@ -28,6 +29,8 @@ export default class Specr extends View {
     this.folder = props()?.folder ?? f?.cwd ?? spaces().find((s) => s.id === f?.space)?.folder ?? null;
     this.specs = [];
     this.errors = [];
+    this.found = []; // specs written outside specr (S11)
+    this.announced = new Set(); // found paths already notified
     this.selected = null; // spec ID
     this.spec = null; // { state, path, doc }
     this.pieces = [];
@@ -114,7 +117,7 @@ export default class Specr extends View {
   }
 
   watchDir() {
-    return this.spec?.path ? this.spec.path.replace(/\/[^/]*$/, "") : specsDir(this.folder);
+    return this.spec?.path ? this.spec.path.replace(/\/[^/]*$/, "") : this.folder;
   }
 
   // Reads the folder again; true when something changed (so the caller notifies).
@@ -130,6 +133,7 @@ export default class Specr extends View {
         this.listKey = next;
         this.specs = summaries;
         this.errors = errors;
+        if (await this.scan(summaries)) changed = true;
       } else {
         try {
           const spec = await loadSpec(this.folder, this.selected);
@@ -149,6 +153,59 @@ export default class Specr extends View {
     } finally {
       this.busy = false;
     }
+  }
+
+  // S11: look for specs nobody registered; one notification per new path. True when the list changed.
+  async scan(summaries) {
+    let found;
+    try {
+      this.adapter ??= await defaultAdapter();
+      found = await scanFound(this.folder, this.adapter, summaries.map((s) => s.specPath).filter(Boolean));
+    } catch {
+      return false;
+    }
+    for (const f of unseen(found, this.announced)) {
+      this.announced.add(f.path);
+      notify({ title: `New spec found: ${f.path.split("/").pop()}`, body: f.path, level: "info" });
+    }
+    const key = JSON.stringify(found);
+    const changed = key !== this.foundKey;
+    this.foundKey = key;
+    this.found = found;
+    return changed;
+  }
+
+  dismissFound(f, cx) {
+    cx.spawn(async (cx) => {
+      try {
+        await dismissFound(this.folder, f.path);
+      } catch (e) {
+        this.noteError = `Couldn't dismiss: ${e.message ?? e}`;
+      }
+      this.listKey = null;
+      if (await this.reload()) cx.notify();
+    });
+  }
+
+  // Adopt a found spec: straight away when the path names the ID, else ask (prefilled).
+  adoptFound(f, cx) {
+    cx.spawn(async (cx) => {
+      try {
+        if (f.id) {
+          const state = await adoptFound(this.folder, this.adapter, f, f.id);
+          await this.open(state.id);
+        } else {
+          const text = await readTextFile(`${this.folder}/${f.path}`);
+          this.adopting = { spec: `${this.folder}/${f.path}`, plan: null, tasks: null, found: f };
+          this.adoptInput.set_value(suggestFromHeading(text ?? ""));
+          this.adoptError = null;
+        }
+      } catch (e) {
+        this.adoptError = String(e?.message ?? e);
+        this.listKey = null;
+      }
+      cx.notify();
+    });
   }
 
   // ---- comments: handlers run from events, never from render() ---------------------------------
@@ -311,7 +368,10 @@ export default class Specr extends View {
     this.adoptBusy = true;
     cx.spawn(async (cx) => {
       try {
-        const state = await adoptFiles(this.folder, { ...this.adopting, id: this.adoptInput.value() });
+        const f = this.adopting.found;
+        const state = f
+          ? await adoptFound(this.folder, this.adapter ?? (this.adapter = await defaultAdapter()), f, this.adoptInput.value())
+          : await adoptFiles(this.folder, { ...this.adopting, id: this.adoptInput.value() });
         this.adopting = null;
         this.adoptError = null;
         await this.open(state.id);
@@ -370,7 +430,7 @@ export default class Specr extends View {
     }
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        list({ t, specs: this.specs, errors: this.errors, onAdopt: (cx) => this.startAdopt(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
+        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");

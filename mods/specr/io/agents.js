@@ -25,6 +25,13 @@ export async function adapterFor(folder, state) {
   return { adapter, models: resolveModels(adapter, config, state) };
 }
 
+/** The adapter new specs use (S11 scans with its patterns before any spec record exists). */
+export async function defaultAdapter() {
+  const text = await readTextFile(`${appHome()}/mods/specr/adapters/agent-skills.json`);
+  if (text == null) throw new Error("No adapter \"agent-skills\" is installed.");
+  return loadAdapter(text);
+}
+
 /** Does this owner's terminal still exist? */
 export function ownerAlive(owner) {
   return Boolean(owner?.terminal) && panes().some((p) => p.terminal === owner.terminal);

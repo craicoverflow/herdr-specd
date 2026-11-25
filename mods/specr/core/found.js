@@ -42,3 +42,17 @@ export function pickPlan(adapter, specPath, plans) {
   }
   return null;
 }
+
+export function parseDismissed(text) {
+  try {
+    const v = JSON.parse(text);
+    return Array.isArray(v) ? v.filter((p) => typeof p === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export const withDismissed = (list, path) => (list.includes(path) ? list : [...list, path]);
+
+// Found specs whose path hasn't been announced yet (`seen` is a Set of paths).
+export const unseen = (found, seen) => found.filter((f) => !seen.has(f.path));

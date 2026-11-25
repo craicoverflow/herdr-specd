@@ -4,6 +4,7 @@ import { readTextFile, writeTextFile } from "herdr";
 import { parseState, prepareWrite, currentDocPath } from "../core/state.js";
 import { planAdoption } from "../core/adopt.js";
 import { summarize, sortSummaries } from "../core/summary.js";
+import { findSpecs, matcher, pickPlan, parseDismissed, withDismissed } from "../core/found.js";
 import { roundDir, baseName, reviewRecord } from "../core/submit.js";
 
 const join = (folder, rel) => (rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`);
@@ -37,7 +38,7 @@ export async function loadSpecs(folder) {
       const docPath = currentDocPath(state) ?? state.paths?.spec;
       const docText = docPath ? await read(join(folder, docPath)) : null;
       const tasksText = state.paths?.tasks ? await read(join(folder, state.paths.tasks)) : null;
-      rows.push({ ...summarize(state, { docText, tasksText }), dir: name });
+      rows.push({ ...summarize(state, { docText, tasksText }), dir: name, specPath: state.paths?.spec ?? null });
     } catch (e) {
       errors.push({ id: name, message: String(e?.message ?? e) });
     }
@@ -94,4 +95,54 @@ export async function saveRound(folder, state, { doc, comments, file }) {
   const record = reviewRecord({ id: state.id, phase: state.phase, round: state.round, file, comments, at: Date.now() });
   await writeFresh(`${dir}/review.json`, JSON.stringify(record, null, 2) + "\n");
   return dir;
+}
+
+// ---- S11: specs written outside specr ------------------------------------------------------------
+
+const SKIP_DIRS = new Set(["node_modules", "target", "dist", "build", "vendor"]);
+
+/** Relative paths of markdown files within 3 levels of the folder (no dot-folders, no build folders). */
+export async function listMarkdown(folder, dir = "", depth = 0) {
+  let entries;
+  try {
+    entries = await fs.readdir(dir ? `${folder}/${dir}` : folder, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const e of entries) {
+    const rel = dir ? `${dir}/${e.name}` : e.name;
+    if (e.isDirectory()) {
+      if (depth < 3 && !e.name.startsWith(".") && !SKIP_DIRS.has(e.name)) out.push(...(await listMarkdown(folder, rel, depth + 1)));
+    } else if (/\.md$/i.test(e.name)) out.push(rel);
+  }
+  return out;
+}
+
+const dismissedPath = (folder) => `${folder}/.specr/dismissed.json`;
+
+export async function loadDismissed(folder) {
+  return parseDismissed(await read(dismissedPath(folder)));
+}
+
+export async function dismissFound(folder, path) {
+  const existing = await read(dismissedPath(folder));
+  await writeTextFile(dismissedPath(folder), JSON.stringify(withDismissed(parseDismissed(existing), path), null, 2) + "\n", existing);
+}
+
+/** Specs on disk that no spec record points at: [{ path, id }] with folder-relative paths. */
+export async function scanFound(folder, adapter, recorded) {
+  const [files, dismissed] = await Promise.all([listMarkdown(folder), loadDismissed(folder)]);
+  return findSpecs(adapter, files, { recorded, dismissed });
+}
+
+/** Adopt a found spec: the plan whose `Source spec:` names it comes along. Returns the new state. */
+export async function adoptFound(folder, adapter, found, id) {
+  const patterns = adapter.discover?.plans ?? [];
+  const files = await listMarkdown(folder);
+  const candidates = files.filter((p) => patterns.some((pat) => matcher(pat)(p)));
+  const plans = {};
+  for (const p of candidates) plans[p] = (await read(`${folder}/${p}`)) ?? "";
+  const plan = pickPlan(adapter, found.path, plans);
+  return adoptFiles(folder, { id, spec: `${folder}/${found.path}`, plan: plan ? `${folder}/${plan}` : null, tasks: null });
 }

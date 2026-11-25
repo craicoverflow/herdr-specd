@@ -39,3 +39,19 @@ test("a plan is attached only when its Source spec names the spec", () => {
   const a = structuredClone(adapter); delete a.discover;
   assert.equal(pickPlan(a, "SPEC-auth.md", plans), null);
 });
+
+import { parseDismissed, withDismissed, unseen } from "../mods/specr/core/found.js";
+
+test("dismissed.json is read tolerantly and written without duplicates", () => {
+  assert.deepEqual(parseDismissed('["SPEC.md",3,"a.md"]'), ["SPEC.md", "a.md"]);
+  assert.deepEqual(parseDismissed("not json"), []);
+  assert.deepEqual(parseDismissed(null), []);
+  assert.deepEqual(withDismissed(["a.md"], "a.md"), ["a.md"]);
+  assert.deepEqual(withDismissed(["a.md"], "b.md"), ["a.md", "b.md"]);
+});
+
+test("unseen: only paths not yet announced, so each gets one notification", () => {
+  const seen = new Set(["SPEC.md"]);
+  const f = [{ path: "SPEC.md" }, { path: "SPEC-auth.md" }];
+  assert.deepEqual(unseen(f, seen).map((x) => x.path), ["SPEC-auth.md"]);
+});
