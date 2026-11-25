@@ -4,7 +4,11 @@ import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
 import { focused, spaces, props, theme, nextCommand, watchFolder, openOverlay, closeOverlay, checking, pickFiles } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles } from "./io/files.js";
+import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles, saveRound } from "./io/files.js";
+import { adapterFor, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
+import { reviewText } from "./core/review.js";
+import { firstMessage } from "./core/submit.js";
+import { submitReview, setOwner } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { adoptView } from "./ui/adopt.js";
 import { lineStarts } from "./core/anchors.js";
@@ -225,6 +229,55 @@ export default class Specr extends View {
     });
   }
 
+  // ---- submit (S4): a handler; nothing is sent anywhere until the person presses Submit ----------
+
+  submit(cx) {
+    if (this.submitting || this.saving) return;
+    const { state, doc } = this.spec;
+    let out;
+    try {
+      out = submitReview(state);
+      if (doc == null) throw new Error(`The ${state.phase} document isn't there, so there is nothing to keep as this round.`);
+    } catch (e) {
+      this.noteError = String(e.message);
+      cx.notify();
+      return;
+    }
+    this.submitting = true;
+    this.saving = true; // the poll must not reload state.json under a half-finished Submit
+    this.noteError = null;
+    cx.notify();
+    cx.spawn(async (cx) => {
+      let sent = false;
+      try {
+        const phase = state.phase;
+        const file = state.paths[phase];
+        const text = reviewText(file, out.round, out.comments);
+        await saveRound(this.folder, state, { doc, comments: out.comments, file });
+        let next = out.state;
+        const owner = state.owners?.[phase];
+        if (ownerAlive(owner)) {
+          await sendMessage(owner.terminal, text);
+        } else {
+          const { adapter, models } = await adapterFor(this.folder, state);
+          const started = await startAgent(cx, { folder: this.folder, adapter, model: models[phase], name: `${state.id} ${phase}`, message: firstMessage(file, text) });
+          next = setOwner(next, phase, started);
+        }
+        sent = true;
+        await saveState(this.folder, next);
+        this.spec = { ...this.spec, state: next };
+      } catch (e) {
+        this.noteError = sent
+          ? `The review was sent, but saving the round failed: ${e.message ?? e}. Don't submit again; remove the comments by hand.`
+          : `Couldn't submit: ${e.message ?? e}`;
+      } finally {
+        this.submitting = false;
+        this.saving = false;
+      }
+      cx.notify();
+    });
+  }
+
   // ---- adopt (S2): handlers only ---------------------------------------------------------------
 
   startAdopt(cx) {
@@ -326,7 +379,7 @@ export default class Specr extends View {
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,
         comments: { sel: this.sel, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
-          onRemove: (i, cx) => this.remove(i, cx), onJump: (i, cx) => this.jump(i, cx) },
+          onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx), onJump: (i, cx) => this.jump(i, cx) },
         diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
           settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },

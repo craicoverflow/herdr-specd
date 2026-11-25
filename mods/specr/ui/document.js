@@ -42,7 +42,7 @@ export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comm
         ? diagram({ t, i, code: p.code, pic: diagrams.store.pic(p.code), missing: diagrams.store.missing,
           showInstall: i === firstDiagram, availW: diagrams.availW, onOpen: diagrams.onOpen })
         : piece(p, i, ctx))));
-    body = h_flex().flex_1().min_h(0).child(text).child(sidePanel({ t, pending: s.pending, ...comments }));
+    body = h_flex().flex_1().min_h(0).child(text).child(sidePanel({ t, pending: s.pending, status: s.status, ...comments }));
   }
   return v_flex().size_full().bg(t.background).child(header).child(body);
 }

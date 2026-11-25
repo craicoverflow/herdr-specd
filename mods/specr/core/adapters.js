@@ -83,10 +83,11 @@ export function resolveModels(adapter, folder, spec) {
   return out;
 }
 
-export function agentArgv(adapter, { model, effort }) {
+export function agentArgv(adapter, { model, effort, session }) {
   const argv = [];
   for (const a of adapter.agent.argv) {
     if (a === "{effort}") { if (effort) argv.push(effort); else argv.pop(); continue; } // drop "--effort" too
+    if (a === "{session}") { if (session) argv.push(session); else argv.pop(); continue; }
     argv.push(a.replaceAll("{model}", model));
   }
   return argv;

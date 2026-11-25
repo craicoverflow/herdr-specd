@@ -4,6 +4,7 @@ import { readTextFile, writeTextFile } from "herdr";
 import { parseState, prepareWrite, currentDocPath } from "../core/state.js";
 import { planAdoption } from "../core/adopt.js";
 import { summarize, sortSummaries } from "../core/summary.js";
+import { roundDir, baseName, reviewRecord } from "../core/submit.js";
 
 const join = (folder, rel) => (rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`);
 
@@ -76,4 +77,21 @@ export async function adoptFiles(folder, { id, spec, plan, tasks }) {
   if (!(await read(spec))) throw new Error(`Can't read ${spec}.`);
   await writeTextFile(`${specsDir(folder)}/${state.id}/state.json`, prepareWrite(state, null), null);
   return state;
+}
+
+async function writeFresh(path, text) {
+  await writeTextFile(path, text, await read(path)); // a retry after a half-finished Submit replaces what it left
+}
+
+/**
+ * S4: keep a round: the reviewed document and review.json under .specr/specs/<ID>/rounds/<n>/.
+ * `state` is the state before Submit (its phase, round and file); returns the round's folder.
+ */
+export async function saveRound(folder, state, { doc, comments, file }) {
+  const dir = `${specsDir(folder)}/${state.id}/rounds/${roundDir(state.phase, state.round)}`;
+  await fs.mkdir(dir, { recursive: true });
+  await writeFresh(`${dir}/${baseName(file)}`, doc);
+  const record = reviewRecord({ id: state.id, phase: state.phase, round: state.round, file, comments, at: Date.now() });
+  await writeFresh(`${dir}/review.json`, JSON.stringify(record, null, 2) + "\n");
+  return dir;
 }
