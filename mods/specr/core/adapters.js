@@ -19,6 +19,13 @@ export function validateAdapter(a) {
     if (!str(a.paths[k])) errors.push(`paths.${k}: required string`);
     else if (!a.paths[k].includes("{id}")) errors.push(`paths.${k}: must contain {id}`);
   }
+  if (a.discover !== undefined) {
+    if (!isObj(a.discover)) errors.push("discover: must be an object");
+    else for (const k of ["specs", "plans"]) {
+      const v = a.discover[k];
+      if (v !== undefined && !(Array.isArray(v) && v.every(str))) errors.push(`discover.${k}: must be an array of path patterns`);
+    }
+  }
   const argv = a.agent?.argv;
   if (!Array.isArray(argv) || argv.length === 0 || !argv.every(str)) errors.push("agent.argv: required non-empty array of strings");
   if (!isObj(a.phases)) errors.push("phases: required object");

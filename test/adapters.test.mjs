@@ -74,3 +74,16 @@ test("a filled build prompt never starts its argument text with auto or all", ()
   // a brief that starts with "all" can't leak into the build prompt
   assert.ok(!/^(auto|all)\b/i.test(fillPrompt(a, "build", { ...vars, brief: "all of it" })));
 });
+
+test("discover is optional and validated", () => {
+  const a = shipped();
+  assert.deepEqual(a.discover.specs, ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md"]);
+  assert.deepEqual(a.discover.plans, ["tasks/plan.md"]);
+  const bad = structuredClone(a); bad.discover = { specs: "SPEC.md", plans: [""] };
+  const errs = validateAdapter(bad);
+  assert.ok(errs.some((e) => e.includes("discover.specs")) && errs.some((e) => e.includes("discover.plans")));
+  const notObj = structuredClone(a); notObj.discover = [];
+  assert.ok(validateAdapter(notObj).some((e) => e.includes("discover:")));
+  const none = structuredClone(a); delete none.discover;
+  assert.deepEqual(validateAdapter(none), []);
+});
