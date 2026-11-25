@@ -2,13 +2,15 @@
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { focused, spaces, props, theme, nextCommand, watchFolder } from "herdr";
+import { focused, spaces, props, theme, nextCommand, watchFolder, openOverlay, closeOverlay, checking } from "herdr";
 import { pieces } from "./core/pieces.js";
 import { loadSpecs, loadSpec, saveState, specsDir } from "./io/files.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
 import { documentView } from "./ui/document.js";
+import { Diagrams, isDark } from "./io/mermaid.js";
+import { zoomView } from "./ui/diagram.js";
 
 const POLL_MS = 1000; // a safety net under watchFolder: the view is never more than this stale
 
@@ -29,6 +31,16 @@ export default class Specr extends View {
     this.sel = null; // the last settled selection as an anchor (ok) or { ok: false, reason }
     this.editing = null; // index of the pending comment being edited
     this.noteError = null;
+    // A natural-size diagram window is this same mod opened with a `diagram` prop: it shows the picture only.
+    this.zoom = props()?.diagram ?? null;
+    if (this.zoom) return;
+    this.diagrams = new Diagrams();
+    this.docW = 800;
+    this.settingsOpen = false;
+    this.mmdcInput = InputState.new({ placeholder: "mmdc" });
+    this.mmdcInput.set_value(this.diagrams.settings.mmdc);
+    this.puppeteerInput = InputState.new({ placeholder: "/path/to/puppeteer.json" });
+    this.puppeteerInput.set_value(this.diagrams.settings.puppeteer);
     this.input = InputState.new({ placeholder: "Comment on the selection" });
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.editInput = InputState.new({ placeholder: "Edit the comment" });
@@ -54,6 +66,11 @@ export default class Specr extends View {
       cx.spawn(async (cx) => {
         if (await this.reload()) cx.notify();
       });
+      // A theme switch is noticed here and the diagrams are drawn again in the other theme.
+      if (this.diagramsDirty || isDark() !== this.diagrams.dark) {
+        this.diagramsDirty = false;
+        this.renderDiagrams(cx);
+      }
     });
     // Dev command loop: herdr-app do specr.<top|open-first|next|back>
     cx.spawn(async (cx) => {
@@ -63,6 +80,27 @@ export default class Specr extends View {
         cx.notify();
       }
     });
+  }
+
+  // Draw the shown document's diagrams (one at a time). Called from init's tasks, timers and
+  // handlers only, never from render().
+  renderDiagrams(cx) {
+    if (checking() || !this.pieces.some((p) => p.kind === "mermaid")) return;
+    cx.spawn(async (cx) => {
+      await this.diagrams.drain(() => this.pieces.filter((p) => p.kind === "mermaid").map((p) => p.code), cx);
+    });
+  }
+
+  openZoom(pic, cx) {
+    openOverlay({ mod: "specr", kind: "window", key: "specr-diagram", width: 0.8, height: 0.8, props: { diagram: pic } });
+    cx.notify();
+  }
+
+  saveDiagramSettings(cx) {
+    this.diagrams.update({ mmdc: this.mmdcInput.value(), puppeteer: this.puppeteerInput.value() });
+    this.settingsOpen = false;
+    this.renderDiagrams(cx);
+    cx.notify();
   }
 
   watchDir() {
@@ -90,6 +128,7 @@ export default class Specr extends View {
             this.pieces = spec.doc == null ? [] : pieces(spec.doc);
             this.error = null;
             changed = true;
+            this.diagramsDirty = true;
           }
         } catch (e) {
           if (this.error !== String(e.message)) changed = true;
@@ -212,6 +251,7 @@ export default class Specr extends View {
 
   render(_cx) {
     const t = theme();
+    if (this.zoom) return zoomView({ t, pic: this.zoom, onClose: () => closeOverlay(props().overlay) });
     if (!this.folder) return div().size_full().p(16).bg(t.background).text_color(t.foreground).child("No folder: focus a terminal first");
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
@@ -225,6 +265,10 @@ export default class Specr extends View {
         comments: { sel: this.sel, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
           onRemove: (i, cx) => this.remove(i, cx), onJump: (i, cx) => this.jump(i, cx) },
+        diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
+          onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
+          settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },
+            mmdcInput: this.mmdcInput, puppeteerInput: this.puppeteerInput, onSave: (cx) => this.saveDiagramSettings(cx) } },
         onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }) }));
   }
 }
