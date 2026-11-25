@@ -1,0 +1,10 @@
+{
+  "tasks": 1,
+  "spec": "PROJ-1",
+  "items": [
+    { "id": "t1", "kind": "task", "title": "OAuth callback endpoint", "repo": "api", "section": "Task 1: OAuth callback endpoint", "deps": [] },
+    { "id": "t2", "kind": "task", "title": "Login button", "repo": "web", "section": "Task 2: Login button", "deps": ["t1"] },
+    { "id": "c1", "kind": "checkpoint", "title": "Checkpoint: Foundation", "repo": "api", "deps": ["t1", "t2"],
+      "checks": ["All tests pass", "Login works end to end"] }
+  ]
+}
