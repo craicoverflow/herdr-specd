@@ -1,5 +1,5 @@
 // S1: a new spec. Pure: the state to save, the agent's model and the first message.
-import { createSpec, documentReady } from "./state.js";
+import { createSpec, documentReady, approve } from "./state.js";
 import { resolvePaths, resolveModels, fillPrompt } from "./adapters.js";
 
 /** `models` is the dialog's choice ({spec?}); `config` is .specr/config.json. Throws a message fit to show; `code: "used"` for a taken ID. */
@@ -23,4 +23,28 @@ export function autoReview(state, doc, submitted = null) {
   if (state.status !== "drafting" || doc == null || !doc.trim()) return null;
   if (submitted != null && doc === submitted) return null;
   return documentReady(state);
+}
+
+/**
+ * S6: approve the spec. The state to save (Plan, drafting), the plan agent's model and the first
+ * message. Throws a message fit to show while comments are pending or the spec isn't in review.
+ */
+export function planApproval({ adapter, state, config }) {
+  const next = approve(state);
+  if (next.phase !== "plan") throw new Error("Only a spec in review is approved here.");
+  const chosen = resolveModels(adapter, config, next);
+  const { spec, plan, tasks } = state.paths;
+  const message = fillPrompt(adapter, "plan", { brief: state.brief, specPath: spec, planPath: plan, tasksPath: tasks });
+  return { state: next, model: chosen.plan, message };
+}
+
+/** Why Approve is off, or null when it's on. */
+export function approveBlock(state) {
+  if (state.phase !== "spec") return "Approving a plan dispatches its tasks (not built yet).";
+  if (state.status !== "review") return `The spec is ${state.status}: approve it once it's in review.`;
+  if (state.pending.length > 0) {
+    const n = state.pending.length;
+    return `Submit or remove the ${n} pending comment${n === 1 ? "" : "s"} first.`;
+  }
+  return null;
 }

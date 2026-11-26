@@ -50,3 +50,43 @@ test("autoReview: after a submitted round, waits until the document differs from
   assert.equal(autoReview(state, "# Spec", "# Spec"), null);
   assert.equal(autoReview(state, "# Spec v2", "# Spec").status, "review");
 });
+
+import { planApproval, approveBlock } from "../mods/specr/core/newspec.js";
+import { documentReady } from "../mods/specr/core/state.js";
+import { checkSourceSpec } from "../mods/specr/core/tasks.js";
+
+const inReview = () => documentReady(planNewSpec({ adapter, id: "DEMO-1", brief: "Add login", existingIds: [] }).state);
+
+test("approve: disabled with one pending comment, enabled with none", () => {
+  const s = inReview();
+  assert.equal(approveBlock(s), null);
+  const withOne = { ...s, pending: [{ lines: [1, 1], quote: "q", body: "b", start: 0, end: 1 }] };
+  assert.match(approveBlock(withOne), /1 pending comment first/);
+  assert.throws(() => planApproval({ adapter, state: withOne }), /pending comment/);
+});
+
+test("approve: not in review or not the spec phase gives a reason", () => {
+  const drafting = planNewSpec({ adapter, id: "D-1", brief: "x", existingIds: [] }).state;
+  assert.match(approveBlock(drafting), /drafting/);
+  assert.match(approveBlock({ ...inReview(), phase: "plan" }), /dispatch/);
+});
+
+test("approve: Plan drafting, plan model, prompt names plan.md, Source spec, tasks.json, no todo.md", () => {
+  const { state, model, message } = planApproval({ adapter, state: inReview() });
+  assert.equal(state.phase, "plan");
+  assert.equal(state.status, "drafting");
+  assert.deepEqual(model, { model: "opus", effort: "high" });
+  assert.match(message, /^\/agent-skills:plan/);
+  assert.match(message, /exactly this path: specs\/DEMO-1\/plan\.md/);
+  assert.match(message, /first line must be: Source spec: specs\/DEMO-1\/spec\.md/);
+  assert.match(message, /specs\/DEMO-1\/tasks\.json/);
+  assert.match(message, /Do not create tasks\/todo\.md/);
+});
+
+test("a plan whose Source spec names another file shows the error", () => {
+  const c = checkSourceSpec("Source spec: specs/OTHER/spec.md\n# Plan", "specs/DEMO-1/spec.md");
+  assert.equal(c.errors.length, 1);
+  assert.match(c.errors[0], /specs\/OTHER\/spec\.md/);
+  assert.deepEqual(checkSourceSpec("Source spec: specs/DEMO-1/spec.md\n", "specs/DEMO-1/spec.md"), { errors: [], warnings: [] });
+  assert.equal(checkSourceSpec("# Plan", "x").warnings.length, 1);
+});

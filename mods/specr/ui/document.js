@@ -36,13 +36,17 @@ export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comm
   else {
     const firstDiagram = pieces.findIndex((p) => p.kind === "mermaid");
     const ctx = { t, pending: s.pending, sel: comments.sel, onSelect: comments.onSelect };
-    const text = v_flex().id("doc").flex_1().min_w(0).h_full().overflow_y_scrollbar().track_scroll(scroll).px(24).py(16).gap(6)
+    const text = v_flex().id("doc").flex_1().min_w(0).min_h(0).overflow_y_scrollbar().track_scroll(scroll).px(24).py(16).gap(6)
       .on_size_change((size, cx) => diagrams.onSize(size.width / (Number(settings().zoom) || 1), cx))
       .children(pieces.map((p, i) => (p.kind === "mermaid"
         ? diagram({ t, i, code: p.code, pic: diagrams.store.pic(p.code), missing: diagrams.store.missing,
           showInstall: i === firstDiagram, availW: diagrams.availW, onOpen: diagrams.onOpen })
         : piece(p, i, ctx))));
-    body = h_flex().flex_1().min_h(0).child(text).child(sidePanel({ t, pending: s.pending, status: s.status, ...comments }));
+    const notes = [...(comments.planCheck?.errors ?? []).map((m) => [m, t.blocked]), ...(comments.planCheck?.warnings ?? []).map((m) => [m, t.working])];
+    const banner = notes.length ? v_flex().gap(2).px(24).py(8).border_b_1().border_color(t.border)
+      .children(notes.map(([m, c]) => div().text_size(12).text_color(c).whitespace_normal().child(m))) : null;
+    const main = v_flex().flex_1().min_w(0).h_full().children(banner ? [banner, text] : [text]);
+    body = h_flex().flex_1().min_h(0).child(main).child(sidePanel({ t, pending: s.pending, status: s.status, ...comments }));
   }
   return v_flex().size_full().bg(t.background).child(header).child(body);
 }

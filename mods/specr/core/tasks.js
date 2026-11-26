@@ -45,6 +45,19 @@ function findCycle(items) {
   return null;
 }
 
+/** The plan's `Source spec:` line against the spec's path: { errors, warnings }. */
+export function checkSourceSpec(planText, specPath) {
+  const errors = [];
+  const warnings = [];
+  const first = planText.split("\n").find((l) => l.trim() !== "");
+  const m = first && /^Source spec:\s*(.*?)\s*$/.exec(first);
+  if (!m) warnings.push("plan.md has no Source spec: line");
+  else if (m[1].replace(/^`|`$/g, "") !== specPath) {
+    errors.push(`plan.md: Source spec is ${JSON.stringify(m[1])}, expected ${JSON.stringify(specPath)}`);
+  }
+  return { errors, warnings };
+}
+
 /**
  * Every rule at once. ctx: { specId, specPath, planText, isRepo(relPath) -> boolean }.
  * Returns { errors, warnings }.
@@ -57,12 +70,9 @@ export function validateTasks(tasks, { specId, specPath, planText, isRepo }) {
   if (tasks.spec !== specId) errors.push(`spec: expected ${JSON.stringify(specId)}, got ${JSON.stringify(tasks.spec)}`);
 
   if (planText !== undefined) {
-    const first = planText.split("\n").find((l) => l.trim() !== "");
-    const m = first && /^Source spec:\s*(.*?)\s*$/.exec(first);
-    if (!m) warnings.push("plan.md has no Source spec: line");
-    else if (m[1].replace(/^`|`$/g, "") !== specPath) {
-      errors.push(`plan.md: Source spec is ${JSON.stringify(m[1])}, expected ${JSON.stringify(specPath)}`);
-    }
+    const c = checkSourceSpec(planText, specPath);
+    errors.push(...c.errors);
+    warnings.push(...c.warnings);
   }
 
   if (!Array.isArray(tasks.items) || tasks.items.length === 0) {

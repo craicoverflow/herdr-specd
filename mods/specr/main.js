@@ -13,7 +13,8 @@ import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
 import { newView } from "./ui/new.js";
-import { planNewSpec, autoReview } from "./core/newspec.js";
+import { planNewSpec, autoReview, planApproval, approveBlock } from "./core/newspec.js";
+import { checkSourceSpec } from "./core/tasks.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
@@ -353,6 +354,42 @@ export default class Specr extends View {
     });
   }
 
+  // ---- approve (S6): a handler; the plan agent starts only when the person presses Approve -------
+
+  approve(cx) {
+    if (this.approving || this.saving) return;
+    const { state } = this.spec;
+    const block = approveBlock(state);
+    if (block) {
+      this.noteError = block;
+      cx.notify();
+      return;
+    }
+    this.approving = true;
+    this.saving = true; // the poll must not reload state.json under a half-finished approval
+    this.noteError = null;
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const { adapter } = await adapterFor(this.folder, state);
+        const config = await folderConfig(this.folder);
+        const plan = planApproval({ adapter, state, config });
+        const started = await startAgent(cx, { folder: this.folder, adapter, model: plan.model, name: `${state.id} plan`, message: plan.message });
+        const next = setOwner(plan.state, "plan", started);
+        await saveState(this.folder, next);
+        this.spec = { ...this.spec, state: next, doc: null };
+        this.pieces = [];
+        this.sel = null;
+      } catch (e) {
+        this.noteError = `Couldn't approve: ${e.message ?? e}`;
+      } finally {
+        this.approving = false;
+        this.saving = false;
+      }
+      cx.notify();
+    });
+  }
+
   // ---- new spec (S1): handlers only ------------------------------------------------------------
 
   async fillModels() {
@@ -539,7 +576,9 @@ export default class Specr extends View {
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,
         comments: { sel: this.sel, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
-          onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx), onJump: (i, cx) => this.jump(i, cx) },
+          onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx),
+          approveBlock: approveBlock(this.spec.state), approving: this.approving, onApprove: this.spec.state.phase === "spec" ? (cx) => this.approve(cx) : null,
+          planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? checkSourceSpec(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
         diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
           settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },

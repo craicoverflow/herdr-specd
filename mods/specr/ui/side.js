@@ -41,6 +41,15 @@ function submitButton({ t, pending, status, submitting, onSubmit }) {
   return (ok ? b.cursor_pointer().on_click((_e, cx) => onSubmit(cx)) : b).child(label);
 }
 
+function approveButton({ t, approveBlock, approving, onApprove }) {
+  const ok = !approveBlock && !approving;
+  const b = div().id("approve").w_full().py(6).rounded(6).text_size(13).font_semibold().text_center()
+    .bg(ok ? t.accent : t.border).text_color(ok ? t.background : t.dim);
+  const button = (ok ? b.cursor_pointer().on_click((_e, cx) => onApprove(cx)) : b).child(approving ? "Approving…" : "Approve spec");
+  return v_flex().gap(4).child(button)
+    .children(approveBlock ? [div().text_size(11).text_color(t.muted).whitespace_normal().child(approveBlock)] : []);
+}
+
 export function sidePanel(p) {
   const { t, pending, error } = p;
   const label = (s) => div().text_size(11).font_semibold().text_color(t.dim).child(s.toUpperCase());
@@ -50,5 +59,6 @@ export function sidePanel(p) {
     .child(label(`Pending comments · ${pending.length}`))
     .children(pending.length ? pending.map((c, i) => card({ ...p, c, i })) : [div().text_size(13).text_color(t.muted).child("None yet.")])
     .children(pending.length || p.submitting ? [submitButton(p)] : [])
+    .children(p.onApprove ? [approveButton(p)] : [])
     .children(error ? [div().text_size(12).text_color(t.blocked).whitespace_normal().child(error)] : []);
 }
