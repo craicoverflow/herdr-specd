@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cacheKey, mmdcArgs, pngSize, fitSize, cleanSettings, failureNote, INSTALL_NOTE } from "../mods/specr/core/diagram.js";
-import { hash } from "../mods/specr/core/pieces.js";
+import { cacheKey, mmdcArgs, pngSize, fitSize, cleanSettings, failureNote, INSTALL_NOTE } from "../mods/specd/core/diagram.js";
+import { hash } from "../mods/specd/core/pieces.js";
 
 test("cacheKey is hash(source)-theme", () => {
   assert.equal(cacheKey("graph TD", true), `${hash("graph TD")}-dark`);

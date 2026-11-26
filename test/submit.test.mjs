@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { roundDir, firstMessage, reviewRecord, baseName, findNewTerminal } from "../mods/specr/core/submit.js";
-import { agentArgv, loadAdapter } from "../mods/specr/core/adapters.js";
+import { roundDir, firstMessage, reviewRecord, baseName, findNewTerminal } from "../mods/specd/core/submit.js";
+import { agentArgv, loadAdapter } from "../mods/specd/core/adapters.js";
 import { readFileSync } from "node:fs";
 
 test("round dirs: the spec phase is rounds/<n>, later phases are prefixed so rounds never collide", () => {
@@ -33,7 +33,7 @@ test("findNewTerminal: the terminal of a tab with that name that wasn't there be
 });
 
 test("agent argv fills the session id, and drops its flag without one", () => {
-  const a = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
+  const a = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
   assert.deepEqual(agentArgv(a, { model: "opus", effort: "high", session: "abc" }), ["claude", "--model", "opus", "--effort", "high", "--session-id", "abc"]);
   assert.deepEqual(agentArgv(a, { model: "opus", session: "abc" }), ["claude", "--model", "opus", "--session-id", "abc"]);
 });

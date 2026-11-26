@@ -1,0 +1,14 @@
+{
+  "tasks": 1,
+  "spec": "SHOP-42",
+  "items": [
+    { "id": "t1", "kind": "task", "title": "Carts table and store", "repo": "api", "section": "Task 1: Carts table and store", "deps": [] },
+    { "id": "t2", "kind": "task", "title": "Cart endpoints and merge", "repo": "api", "section": "Task 2: Cart endpoints and merge", "deps": ["t1"] },
+    { "id": "c1", "kind": "checkpoint", "title": "Checkpoint: API contract", "repo": "api", "deps": ["t1", "t2"],
+      "checks": ["go test ./... passes", "api/openapi.yaml lists the three endpoints"] },
+    { "id": "t3", "kind": "task", "title": "Cart client and sign-in merge", "repo": "web", "section": "Task 3: Cart client and sign-in merge", "deps": ["c1"] },
+    { "id": "t4", "kind": "task", "title": "Cart badge", "repo": "web", "section": "Task 4: Cart badge", "deps": ["t3"] },
+    { "id": "c2", "kind": "checkpoint", "title": "Checkpoint: Saved carts end to end", "repo": "web", "deps": ["t3", "t4"],
+      "checks": ["The Playwright sign-in merge test passes against a local API"] }
+  ]
+}

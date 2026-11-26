@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loadAdapter, validateAdapter, resolvePaths, resolveModels, agentArgv, fillPrompt, AdapterError } from "../mods/specr/core/adapters.js";
+import { loadAdapter, validateAdapter, resolvePaths, resolveModels, agentArgv, fillPrompt, AdapterError } from "../mods/specd/core/adapters.js";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const shipped = () => loadAdapter(read("../mods/specr/adapters/agent-skills.json"));
+const shipped = () => loadAdapter(read("../mods/specd/adapters/agent-skills.json"));
 const vars = { brief: "Add login", specPath: "specs/P-1/spec.md", planPath: "specs/P-1/plan.md", tasksPath: "specs/P-1/tasks.json", section: "Task 1: X" };
 
 test("agent-skills adapter loads", () => {
@@ -18,8 +18,8 @@ test("a broken adapter reports every problem at once", () => {
     phases: { spec: { prompt: "no brief" }, plan: { model: "m", prompt: "{nope}" } } };
   const errs = validateAdapter(bad);
   for (const frag of ["adapter:", "id:", "name:", "paths.spec: must contain {id}", "paths.plan", "paths.tasks", "agent.argv",
-    "phases.spec.model", "phases.spec.prompt: must contain {specr.spec}", "phases.spec.prompt: must contain {brief}",
-    "phases.plan.prompt: must contain {specr.plan}", "unknown placeholder {nope}", "phases.build: required"])
+    "phases.spec.model", "phases.spec.prompt: must contain {specd.spec}", "phases.spec.prompt: must contain {brief}",
+    "phases.plan.prompt: must contain {specd.plan}", "unknown placeholder {nope}", "phases.build: required"])
     assert.ok(errs.some((e) => e.includes(frag)), `missing: ${frag}\n${errs.join("\n")}`);
   assert.throws(() => loadAdapter(bad), (e) => e instanceof AdapterError && e.errors.length === errs.length);
   assert.throws(() => loadAdapter("{oops"), /invalid JSON/);
@@ -49,7 +49,7 @@ test("agent argv fills model and effort", () => {
   assert.deepEqual(agentArgv(a, { model: "opus" }), ["claude", "--model", "opus"]);
 });
 
-test("prompts are filled with specr blocks", () => {
+test("prompts are filled with specd blocks", () => {
   const a = shipped();
   const spec = fillPrompt(a, "spec", vars);
   assert.ok(spec.startsWith("/agent-skills:spec Add login"));
@@ -59,17 +59,17 @@ test("prompts are filled with specr blocks", () => {
   const build = fillPrompt(a, "build", vars);
   for (const s of ["Task 1: X", "specs/P-1/plan.md", "herdr-task ready", "Don't mark", "incremental-implementation", "test-driven-development"])
     assert.ok(build.includes(s), s);
-  assert.ok(!/\{(brief|specr\.\w+)\}/.test(build));
+  assert.ok(!/\{(brief|specd\.\w+)\}/.test(build));
 });
 
 test("a filled build prompt never starts its argument text with auto or all", () => {
   const a = shipped();
   assert.ok(!/^(auto|all)\b/i.test(fillPrompt(a, "build", vars)));
-  for (const p of ["auto {specr.task}", "All {specr.task}", "/agent-skills:build auto {specr.task}"]) {
+  for (const p of ["auto {specd.task}", "All {specd.task}", "/agent-skills:build auto {specd.task}"]) {
     const bad = structuredClone(a); bad.phases.build.prompt = p;
     assert.throws(() => fillPrompt(bad, "build", vars), /auto or all/);
   }
-  const bad = structuredClone(a); bad.phases.build.prompt = "auto {specr.task}";
+  const bad = structuredClone(a); bad.phases.build.prompt = "auto {specd.task}";
   assert.ok(validateAdapter(bad).some((e) => e.includes("auto or all")));
   // a brief that starts with "all" can't leak into the build prompt
   assert.ok(!/^(auto|all)\b/i.test(fillPrompt(a, "build", { ...vars, brief: "all of it" })));

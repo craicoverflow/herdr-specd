@@ -1,16 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loadAdapter } from "../mods/specr/core/adapters.js";
-import { createSpec } from "../mods/specr/core/state.js";
+import { loadAdapter } from "../mods/specd/core/adapters.js";
+import { createSpec } from "../mods/specd/core/state.js";
 import {
   resolveRepo, dispatchRows, previewArgvs, parseAddResult, workerArgvFor, runDispatch, dispatchSummary,
-} from "../mods/specr/core/dispatch.js";
+} from "../mods/specd/core/dispatch.js";
 
 const fx = (f) => readFileSync(new URL(`./fixtures/plans/valid/${f}`, import.meta.url), "utf8");
 const planText = fx("plan.md");
 const tasks = JSON.parse(fx("tasks.json"));
-const adapter = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
+const adapter = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
 const paths = { spec: "specs/PROJ-1/spec.md", plan: "specs/PROJ-1/plan.md", tasks: "specs/PROJ-1/tasks.json" };
 const state = createSpec({ id: "PROJ-1", brief: "b", adapter: "agent-skills", paths });
 const good = () => JSON.parse(fx("tasks.json"));
@@ -30,7 +30,7 @@ test("dispatchRows: one row per item, dependency order, build model and absolute
   assert.equal(rows[1].folder, "/work/proj/web");
   assert.equal(rows[0].model, "sonnet");
   assert.equal(rows[0].agent, "claude");
-  assert.equal(rows[0].promptFile, "/work/proj/.specr/specs/PROJ-1/prompts/t1.md");
+  assert.equal(rows[0].promptFile, "/work/proj/.specd/specs/PROJ-1/prompts/t1.md");
   assert.match(rows[0].promptText, /Task 1: OAuth callback endpoint/);
   assert.match(rows[2].promptText, /All tests pass/);
 });
@@ -152,8 +152,8 @@ test("dispatchSummary: counts and the here-mode flags", () => {
   assert.match(s.here[0].note, /not in a worktree/i);
 });
 
-import { claudeSessionFile, checkTasksText, errorsMessage } from "../mods/specr/core/dispatch.js";
-import { approveBlock } from "../mods/specr/core/newspec.js";
+import { claudeSessionFile, checkTasksText, errorsMessage } from "../mods/specd/core/dispatch.js";
+import { approveBlock } from "../mods/specd/core/newspec.js";
 
 test("claudeSessionFile: Claude's transcript path for a folder and session", () => {
   assert.equal(

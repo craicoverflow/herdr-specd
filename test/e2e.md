@@ -1,16 +1,16 @@
-# End-to-end checklist: specr MVP
+# End-to-end checklist: specd MVP
 
 Run in a scratch folder that holds two scratch git repos (`api/`, `web/`) and no other specs.
-Copy the mod with `npm run link`, put `mmdc` on `PATH`, open **specr: Open** from a terminal in the
+Copy the mod with `npm run link`, put `mmdc` on `PATH`, open **specd: Open** from a terminal in the
 scratch folder. Each item below is one success criterion from
-[specs/specr-mvp/spec.md](../specs/specr-mvp/spec.md). Tick it with the date and versions used.
+[specs/specd-mvp/spec.md](../specs/specd-mvp/spec.md). Tick it with the date and versions used.
 
 Versions: agent-skills 0.6.18 · Claude Code 2.1.332 · mmdc 12.2.0 (spike install) · Herdr/Shepherdr 3.1.3 `herdr-task` ·
 macOS (Darwin 25.5.0).
 
 **Live run, 2026-11-26** (Herdr.app 0.1.18, Shepherdr 3.1.3, Claude Code 2.1.332, agent-skills 0.6.18,
 Opus 5.5 plan agents, Sonnet workers). Driven from the shell with `tab.new {props: {folder}}` and the
-dev commands (`open-first`, `next`, `approve`, `confirm`) in scratch folders under `~/specr-e2e`.
+dev commands (`open-first`, `next`, `approve`, `confirm`) in scratch folders under `~/specd-e2e`.
 Items that need typing, clicking or selecting in the window were not done and stay unticked.
 
 ## Automated
@@ -20,7 +20,7 @@ Items that need typing, clicking or selecting in the window were not done and st
 ## Live results
 
 - [ ] 1. **S1** Not run through the dialog (typing needed). HS-14's evidence stands: 3 of 3 headless
-  runs of specr's exact first message wrote only `specs/DEMO-1/spec.md`.
+  runs of specd's exact first message wrote only `specs/DEMO-1/spec.md`.
 - [ ] 2. **S3** Not run (mouse selections). Covered in code by the anchors tests only.
 - [ ] 3. **S4** Not run (Submit click). Bug 3 below also hung Submit's `saveRound`; fixed, not yet seen live.
 - [ ] 4. **S5** Not run (needs a submitted round).
@@ -37,7 +37,7 @@ Items that need typing, clicking or selecting in the window were not done and st
   re-run created only `t2` and `c1` and kept `t1`'s ref. Plan agent in auto mode: every stored argv
   ends in `--permission-mode auto`; in manual mode: none does (Settings' `default`).
 - [x] 7. **S8** Both fixture diagrams render in the window (dark); with `mmdc` off `PATH` they show as
-  source with the install note. Light theme checked headlessly with specr's own `mmdcArgs`
+  source with the install note. Light theme checked headlessly with specd's own `mmdcArgs`
   (`-t default -b transparent`); a live theme switch was skipped (it would change the person's layout).
 - [ ] 8. **S2** Not run (file picker).
 - [ ] 10. **S11** Partly: four specs written by hand (`specs/PROJ-8/spec.md`, `SPEC.md`, `SPEC-auth.md`,
@@ -50,10 +50,10 @@ Items that need typing, clicking or selecting in the window were not done and st
 ## Bugs found
 
 1. **Fixed:** the plan prompt (`core/instructions.js`, `planInstructions`) never gave the `tasks.json`
-   schema, only "tasks.json, version 1". DEMO-1's agent read specr's installed `core/tasks.js` to learn
+   schema, only "tasks.json, version 1". DEMO-1's agent read specd's installed `core/tasks.js` to learn
    it; DEMO-3's copied DEMO-1's file; DEMO-2's invented its own. The prompt now carries a JSON example
    (`tasksExample`, checked against `validateTasks` in `test/instructions.test.mjs`) and the rules.
-   Live re-run (DEMO-4): valid `tasks.json` with no validator errors, without reading specr's source.
+   Live re-run (DEMO-4): valid `tasks.json` with no validator errors, without reading specd's source.
 2. **Fixed:** in Plan · drafting the pane said "The plan document isn't there yet (…/spec.md)": after
    Approve it kept the spec's path. `shownDocPath` now gives the phase document's path (test added).
 3. **Fixed:** in a mod, `fs/promises` writes outside `~/.config/herdr-app` never settle. `writePromptFile`
@@ -66,4 +66,4 @@ Items that need typing, clicking or selecting in the window were not done and st
 
 Nits: a Found notification for `specs/PROJ-8/spec.md` says "spec.md" rather than the ID; after
 dispatch the view still says "Nothing runs until you confirm"; a phase agent started in a folder
-Claude hasn't seen before waits at Claude's "trust this folder?" prompt and specr doesn't show it.
+Claude hasn't seen before waits at Claude's "trust this folder?" prompt and specd doesn't show it.

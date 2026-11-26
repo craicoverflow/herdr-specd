@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { suggestId, relativeTo, planAdoption } from "../mods/specr/core/adopt.js";
+import { suggestId, relativeTo, planAdoption } from "../mods/specd/core/adopt.js";
 
 test("suggestId: PROJ-9.md -> PROJ-9; spec.md in a folder -> the folder name", () => {
   assert.equal(suggestId("/w/docs/PROJ-9.md"), "PROJ-9");

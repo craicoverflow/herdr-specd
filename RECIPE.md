@@ -1,11 +1,11 @@
-# specr
+# specd
 
 A tab in Herdr for reviewing an agent's spec and plan like a pull request, then handing the plan's
 tasks to Shepherdr. You see a spec rendered as a document, with mermaid diagrams drawn as pictures;
 you select a passage, write a comment, and send all comments to the agent at once. When you approve
 the plan, the tasks are created for Shepherdr workers.
 
-![specr](preview.png)
+![specd](preview.png)
 
 ## What you see
 
@@ -14,7 +14,7 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 
 - **Spec list** (nothing selected): title "Specs" with two outlined buttons, **New spec…** and
   **Adopt spec…**. A table: ID (90px), Title, Phase (70px), Pending (70px), Tasks (50px). Empty:
-  "No specs in this folder yet." Below, a "Found" group of specs written outside specr, each with
+  "No specs in this folder yet." Below, a "Found" group of specs written outside specd, each with
   **Adopt** and **Dismiss**.
 - **Review**: a header row (`‹ Specs`, the ID in semibold 14px, `<phase> · <status> · round <n>`,
   a "Changed only · n" toggle after round 1, a diagram settings popover). Below it, left: the
@@ -54,9 +54,9 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 
 ## Built from
 
-- `mod.json`: `{"place":"none","title":"specr","focusable":true,"palette":[...]}` with three palette
-  entries running `tab.new` for this mod (`specr: Open`, `specr: New spec` with `props.new`,
-  `specr: Adopt spec` with `props.adopt`).
+- `mod.json`: `{"place":"none","title":"specd","focusable":true,"palette":[...]}` with three palette
+  entries running `tab.new` for this mod (`specd: Open`, `specd: New spec` with `props.new`,
+  `specd: Adopt spec` with `props.adopt`).
 - `main.js` (one class: init, render, `command(c)` for `top open-first next back approve confirm new
   adopt`), `core/` (pure logic: state, comments, anchors, pieces, rounds, tasks validation, dispatch,
   adapters, found, summary), `io/` (files, agents, herdr-task, mermaid), `ui/` (list, document, side,
@@ -65,11 +65,11 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
   (`div`), `gpui-base` (`v_flex`, `h_flex`, `Input`, `TextView`, `InputState`).
 - Programs run: `herdr-task` (add, start, list), `hc` (send, read) via the agent helpers,
   `mmdc` (mermaid-cli 12.2.0: `-p <puppeteer.json> -q -i in -o out -s 2 -b transparent -t dark|default`).
-- Files it reads or writes outside its folder: the chosen folder's `specs/`, `.specr/`, adapter paths,
+- Files it reads or writes outside its folder: the chosen folder's `specs/`, `.specd/`, adapter paths,
   and Claude Code's session transcript (`~/.claude/projects/<slug>/<session>.jsonl`, read only,
   for the permission mode).
-- State: `.specr/specs/<ID>/state.json` (`state:1`, id, adapter, brief, paths, models, phase,
-  status, round, owners, pending, dispatch) and `.specr/specs/<ID>/rounds/<n>/`.
+- State: `.specd/specs/<ID>/state.json` (`state:1`, id, adapter, brief, paths, models, phase,
+  status, round, owners, pending, dispatch) and `.specd/specs/<ID>/rounds/<n>/`.
 - No images or art.
 
 ## Watch out
@@ -87,7 +87,7 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 - Comments can't span two sections or a diagram; no threads, no suggested changes.
 - Needs `herdr-task` on `PATH` and agent-skills for the default adapter; assumes Opus plans and
   Sonnet builds, changeable in the New spec dialog.
-- Not checked from the CLI: whether the name `specr` is free on herdr.dev/mods.
+- Not checked from the CLI: whether the name `specd` is free on herdr.dev/mods.
 
 ## Done when
 

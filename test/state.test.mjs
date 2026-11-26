@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   STATE_VERSION, createSpec, adoptSpec, parseState, serializeState, prepareWrite,
   documentReady, approve, submitReview, setOwner, finishBuild, currentDocPath, shownDocPath,
-} from "../mods/specr/core/state.js";
+} from "../mods/specd/core/state.js";
 
 const base = { id: "PROJ-123", brief: "do it", adapter: "agent-skills" };
 const paths = { spec: "specs/PROJ-123/spec.md", plan: "specs/PROJ-123/plan.md", tasks: "specs/PROJ-123/tasks.json" };

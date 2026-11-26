@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loadAdapter } from "../mods/specr/core/adapters.js";
-import { findSpecs, suggestId, pickPlan } from "../mods/specr/core/found.js";
+import { loadAdapter } from "../mods/specd/core/adapters.js";
+import { findSpecs, suggestId, pickPlan } from "../mods/specd/core/found.js";
 
-const adapter = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
+const adapter = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
 const files = ["specs/PROJ-9/spec.md", "SPEC.md", "SPEC-auth.md", "docs/SPEC.md", "spec/billing.md",
   "docs/notes.md", "specs/PROJ-9/notes.md", "README.md", "specs/a/b/spec.md", "specs/recorded/spec.md", "SPEC-gone.md"];
 
-test("specs are found in specr's layout and the framework's locations", () => {
+test("specs are found in specd's layout and the framework's locations", () => {
   const found = findSpecs(adapter, files, { recorded: ["specs/recorded/spec.md"], dismissed: ["SPEC-gone.md"] });
   assert.deepEqual(found, [
     { path: "specs/PROJ-9/spec.md", id: "PROJ-9" }, { path: "SPEC.md", id: null }, { path: "SPEC-auth.md", id: "auth" },
@@ -19,7 +19,7 @@ test("a folder's own paths.spec override is matched too", () => {
   assert.deepEqual(findSpecs(adapter, ["docs/x.md", "SPEC.md"], { specPattern: "docs/{id}.md" }).map((f) => f.id), ["x", null]);
 });
 
-test("adapters without discover still find specr's layout", () => {
+test("adapters without discover still find specd's layout", () => {
   const a = structuredClone(adapter); delete a.discover;
   assert.deepEqual(findSpecs(a, files).map((f) => f.path), ["specs/PROJ-9/spec.md", "specs/recorded/spec.md"]);
 });
@@ -40,7 +40,7 @@ test("a plan is attached only when its Source spec names the spec", () => {
   assert.equal(pickPlan(a, "SPEC-auth.md", plans), null);
 });
 
-import { parseDismissed, withDismissed, unseen } from "../mods/specr/core/found.js";
+import { parseDismissed, withDismissed, unseen } from "../mods/specd/core/found.js";
 
 test("dismissed.json is read tolerantly and written without duplicates", () => {
   assert.deepEqual(parseDismissed('["SPEC.md",3,"a.md"]'), ["SPEC.md", "a.md"]);

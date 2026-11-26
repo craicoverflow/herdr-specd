@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { sections, diffSections, reanchor, roundChanges } from "../mods/specr/core/rounds.js";
+import { sections, diffSections, reanchor, roundChanges } from "../mods/specd/core/rounds.js";
 
 const read = (n) => readFileSync(new URL(`./fixtures/rounds/${n}`, import.meta.url), "utf8");
 const oldDoc = read("old.md");

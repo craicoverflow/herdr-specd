@@ -1,0 +1,19 @@
+{
+  "adapter": 1,
+  "id": "agent-skills",
+  "name": "agent-skills (Addy Osmani)",
+  "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/tasks.json" },
+  "discover": { "specs": ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md"], "plans": ["tasks/plan.md"] },
+  "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}", "--session-id", "{session}"] },
+  "phases": {
+    "spec": { "model": "opus", "effort": "high", "prompt": "/agent-skills:spec {brief}\n\n{specd.spec}" },
+    "plan": { "model": "opus", "effort": "high", "prompt": "/agent-skills:plan\n\n{specd.plan}" },
+    "build": {
+      "agent": "claude",
+      "model": "sonnet",
+      "effort": "medium",
+      "prompt": "Use the agent-skills:incremental-implementation and agent-skills:test-driven-development skills (what /agent-skills:build runs).\n\n{specd.task}",
+      "review": { "finishNotes": "Before running herdr-task ready, run /agent-skills:review on your changes and fix any blockers." }
+    }
+  }
+}

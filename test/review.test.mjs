@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { reviewText } from "../mods/specr/core/review.js";
+import { reviewText } from "../mods/specd/core/review.js";
 
 // The spec's example, with its header count corrected to the two comments it shows.
 const expected = `Review of specs/PROJ-123/spec.md, round 2: 2 comments.

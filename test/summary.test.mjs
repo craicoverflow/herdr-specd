@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { docTitle, summarize, sortSummaries } from "../mods/specr/core/summary.js";
+import { docTitle, summarize, sortSummaries } from "../mods/specd/core/summary.js";
 
 test("docTitle: first heading text, heading marks and closing hashes stripped", () => {
   assert.equal(docTitle("\n# Hello world ##\n\n## Other"), "Hello world");

@@ -1,4 +1,8 @@
 node_modules/
 out/
 .DS_Store
-.specr/
+.specd/
+# Written by `herdr-app check` into a mod folder; the app regenerates them.
+mods/*/jsconfig.json
+mods/*/*.d.ts
+mods/*/*/*.d.ts

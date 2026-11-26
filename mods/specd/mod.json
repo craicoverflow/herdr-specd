@@ -1,0 +1,26 @@
+{
+  "place": "none",
+  "title": "specd",
+  "focusable": true,
+  "palette": [
+    {
+      "title": "specd: Open",
+      "command": "tab.new",
+      "args": { "mod": "specd", "name": "specd", "focus": true },
+      "words": "spec review plan tasks"
+    }
+    ,
+    {
+      "title": "specd: New spec",
+      "command": "tab.new",
+      "args": { "mod": "specd", "name": "specd new", "focus": true, "props": { "new": true } },
+      "words": "new start create spec brief draft"
+    },
+    {
+      "title": "specd: Adopt spec",
+      "command": "tab.new",
+      "args": { "mod": "specd", "name": "specd adopt", "focus": true, "props": { "adopt": true } },
+      "words": "adopt register existing spec plan tasks"
+    }
+  ]
+}

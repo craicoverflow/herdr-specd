@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { pieces } from "../mods/specr/core/pieces.js";
+import { pieces } from "../mods/specd/core/pieces.js";
 
 const doc = readFileSync(new URL("./fixtures/specs/PROJ-123/spec.md", import.meta.url), "utf8");
 const ps = pieces(doc);

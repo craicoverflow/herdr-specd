@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loadAdapter } from "../mods/specr/core/adapters.js";
-import { planNewSpec, autoReview } from "../mods/specr/core/newspec.js";
+import { loadAdapter } from "../mods/specd/core/adapters.js";
+import { planNewSpec, autoReview } from "../mods/specd/core/newspec.js";
 
-const adapter = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
+const adapter = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
 
 test("a new spec records the adapter's paths, drafting, and the models chosen", () => {
   const { state } = planNewSpec({ adapter, id: "DEMO-1", brief: "Add login", existingIds: [] });
@@ -51,9 +51,9 @@ test("autoReview: after a submitted round, waits until the document differs from
   assert.equal(autoReview(state, "# Spec v2", "# Spec").status, "review");
 });
 
-import { planApproval, approveBlock } from "../mods/specr/core/newspec.js";
-import { documentReady } from "../mods/specr/core/state.js";
-import { checkSourceSpec } from "../mods/specr/core/tasks.js";
+import { planApproval, approveBlock } from "../mods/specd/core/newspec.js";
+import { documentReady } from "../mods/specd/core/state.js";
+import { checkSourceSpec } from "../mods/specd/core/tasks.js";
 
 const inReview = () => documentReady(planNewSpec({ adapter, id: "DEMO-1", brief: "Add login", existingIds: [] }).state);
 

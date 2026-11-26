@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGroups, taskState, prLink, shouldPoll, repoFolders, POLL_MS } from "../mods/specr/core/build.js";
+import { buildGroups, taskState, prLink, shouldPoll, repoFolders, POLL_MS } from "../mods/specd/core/build.js";
 
 const items = [
   { id: "t1", title: "API", repo: "api" },

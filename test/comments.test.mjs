@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "../mods/specr/core/comments.js";
-import { createSpec, parseState, serializeState } from "../mods/specr/core/state.js";
-import { pieces } from "../mods/specr/core/pieces.js";
-import { lineStarts } from "../mods/specr/core/anchors.js";
+import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "../mods/specd/core/comments.js";
+import { createSpec, parseState, serializeState } from "../mods/specd/core/state.js";
+import { pieces } from "../mods/specd/core/pieces.js";
+import { lineStarts } from "../mods/specd/core/anchors.js";
 
 const paths = { spec: "s.md" };
 const fresh = () => createSpec({ id: "A-1", brief: "b", paths });

@@ -1,11 +1,12 @@
 {
-  "name": "herdr-specr",
+  "name": "herdr-specd",
   "private": true,
+  "license": "MIT",
   "description": "Herdr.app mod: review specs and plans, then dispatch their tasks",
   "type": "module",
   "scripts": {
     "test": "node --test test/",
-    "check": "herdr-app check mods/specr",
+    "check": "herdr-app check mods/specd",
     "link": "bash scripts/link.sh",
     "syntax": "bash scripts/syntax.sh"
   }

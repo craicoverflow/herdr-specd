@@ -7,13 +7,13 @@ import { join } from "node:path";
 import {
   validateTasks, orderItems, extractSection, buildPrompt, addArgv, startArgv,
   readPermissionMode, readPermissionModeFile, planRetry,
-} from "../mods/specr/core/tasks.js";
-import { loadAdapter } from "../mods/specr/core/adapters.js";
+} from "../mods/specd/core/tasks.js";
+import { loadAdapter } from "../mods/specd/core/adapters.js";
 
 const fx = (f) => readFileSync(new URL(`./fixtures/plans/valid/${f}`, import.meta.url), "utf8");
 const planText = fx("plan.md");
 const good = () => JSON.parse(fx("tasks.json"));
-const adapter = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
+const adapter = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
 const ctx = (over = {}) => ({ specId: "PROJ-1", specPath: "specs/PROJ-1/spec.md", planText, isRepo: () => true, ...over });
 const check = (tasks, over) => validateTasks(tasks, ctx(over));
 
@@ -135,11 +135,11 @@ const base = { id: "PROJ-1", folder: "/w/api", agent: "claude", model: "sonnet",
 const item = (over = {}) => ({ id: "t1", kind: "task", title: "OAuth callback endpoint", ...over });
 
 test("addArgv: a task", () => {
-  assert.deepEqual(addArgv(item(), { ...base, promptFile: ".specr/specs/PROJ-1/prompts/t1.md", after: [] }), [
+  assert.deepEqual(addArgv(item(), { ...base, promptFile: ".specd/specs/PROJ-1/prompts/t1.md", after: [] }), [
     "herdr-task", "add", "PROJ-1 · OAuth callback endpoint", "--json",
     "--folder", "/w/api", "--worktree",
     "--agent", "claude", "--model", "sonnet", "--effort", "medium",
-    "--prompt-file", ".specr/specs/PROJ-1/prompts/t1.md",
+    "--prompt-file", ".specd/specs/PROJ-1/prompts/t1.md",
   ]);
 });
 test("addArgv: a checkpoint with --after refs from two folders", () => {
@@ -198,7 +198,7 @@ test("readPermissionMode: Claude Code 2.1.x permission-mode entries count, lates
   assert.equal(readPermissionMode(jsonl({ type: "summary", permissionMode: "auto" })), undefined);
 });
 test("readPermissionModeFile: reads a fixture, nothing for a missing file", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "specr-"));
+  const dir = mkdtempSync(join(tmpdir(), "specd-"));
   const f = join(dir, "s.jsonl");
   writeFileSync(f, jsonl({ type: "user", permissionMode: "default" }, { type: "user", permissionMode: "auto" }));
   assert.equal(await readPermissionModeFile(f, readFile), "auto");

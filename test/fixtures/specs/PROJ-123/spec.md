@@ -126,7 +126,7 @@ Please address each comment by number, edit the file in place, and say what chan
 
 ## Rounds and what changed
 
-Each Submit stores the file as it was, beside the review, in `.specr/specs/<ID>/rounds/<n>/`.
+Each Submit stores the file as it was, beside the review, in `.specd/specs/<ID>/rounds/<n>/`.
 When the file changes after a Submit, the pane opens on the changes since the last round:
 
 - added and changed passages are marked in the margin;
@@ -142,11 +142,11 @@ correct outcome, not a bug.
 
 | File | Written | Holds |
 | --- | --- | --- |
-| `.specr/specs/<ID>/state.json` | on every change | phase, file paths, current round |
-| `.specr/specs/<ID>/rounds/<n>/review.json` | at Submit | the comments and their anchors |
-| `.specr/specs/<ID>/rounds/<n>/<file>` | at Submit | the file as it was reviewed |
+| `.specd/specs/<ID>/state.json` | on every change | phase, file paths, current round |
+| `.specd/specs/<ID>/rounds/<n>/review.json` | at Submit | the comments and their anchors |
+| `.specd/specs/<ID>/rounds/<n>/<file>` | at Submit | the file as it was reviewed |
 
-Nothing in `.specr/` is needed to build the product, so the folder is suggested for `.gitignore`.
+Nothing in `.specd/` is needed to build the product, so the folder is suggested for `.gitignore`.
 
 ## Diagrams
 
@@ -181,14 +181,14 @@ sequenceDiagram
 
 | Command | What it does |
 | --- | --- |
-| `specr review <ID> [spec\|plan]` | Open the review pane on a spec's file |
-| `specr rounds <ID>` | List the rounds of a spec and their comment counts |
-| `specr outdated <ID>` | Print the comments that no longer anchor |
+| `specd review <ID> [spec\|plan]` | Open the review pane on a spec's file |
+| `specd rounds <ID>` | List the rounds of a spec and their comment counts |
+| `specd outdated <ID>` | Print the comments that no longer anchor |
 
 ## Project structure
 
 ```text
-mods/specr/
+mods/specd/
   main.js        the review pane
   segments.js    split markdown into text and diagram pieces
   anchors.js     offsets, line numbers, re-anchoring by quote
@@ -218,7 +218,7 @@ mods/specr/
 
 - **Always:** keep the agent's file untouched; send nothing until the person presses Submit; show
   the source of anything that failed to render.
-- **Ask first:** before storing anything outside the spec folder and `.specr/`.
+- **Ask first:** before storing anything outside the spec folder and `.specd/`.
 - **Never:** edit the spec on the person's behalf; send comments one at a time; drop a comment
   silently when its anchor is lost.
 
