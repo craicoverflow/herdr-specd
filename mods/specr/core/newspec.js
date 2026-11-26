@@ -40,8 +40,8 @@ export function planApproval({ adapter, state, config }) {
 
 /** Why Approve is off, or null when it's on. */
 export function approveBlock(state) {
-  if (state.phase !== "spec") return "Approving a plan dispatches its tasks (not built yet).";
-  if (state.status !== "review") return `The spec is ${state.status}: approve it once it's in review.`;
+  if (state.phase !== "spec" && state.phase !== "plan") return `The ${state.phase} phase is already approved.`;
+  if (state.status !== "review") return `The ${state.phase === "plan" ? "plan" : "spec"} is ${state.status}: approve it once it's in review.`;
   if (state.pending.length > 0) {
     const n = state.pending.length;
     return `Submit or remove the ${n} pending comment${n === 1 ? "" : "s"} first.`;

@@ -13,6 +13,7 @@ const tasks = JSON.parse(fx("tasks.json"));
 const adapter = loadAdapter(readFileSync(new URL("../mods/specr/adapters/agent-skills.json", import.meta.url), "utf8"));
 const paths = { spec: "specs/PROJ-1/spec.md", plan: "specs/PROJ-1/plan.md", tasks: "specs/PROJ-1/tasks.json" };
 const state = createSpec({ id: "PROJ-1", brief: "b", adapter: "agent-skills", paths });
+const good = () => JSON.parse(fx("tasks.json"));
 const base = { tasks, state, adapter, config: null, folder: "/work/proj", planText, review: false };
 
 test("resolveRepo joins and normalises against the spec folder", () => {
@@ -149,4 +150,47 @@ test("dispatchSummary: counts and the here-mode flags", () => {
   assert.equal(s.started, 3);
   assert.deepEqual(s.here.map((h) => h.ref), ["A-2"]);
   assert.match(s.here[0].note, /not in a worktree/i);
+});
+
+import { claudeSessionFile, checkTasksText, errorsMessage } from "../mods/specr/core/dispatch.js";
+import { approveBlock } from "../mods/specr/core/newspec.js";
+
+test("claudeSessionFile: Claude's transcript path for a folder and session", () => {
+  assert.equal(
+    claudeSessionFile("/Users/me", "/Users/me/.herdr/code/a_b", "abc-123"),
+    "/Users/me/.claude/projects/-Users-me--herdr-code-a-b/abc-123.jsonl",
+  );
+});
+
+test("checkTasksText: a cycle and an unknown repo are both listed, and nothing is valid", () => {
+  const t = good();
+  t.items[0].deps = ["t2"]; // t1 <-> t2
+  t.items[1].repo = "nope";
+  const r = checkTasksText(JSON.stringify(t), { specId: "PROJ-1", specPath: paths.spec, planText, isRepo: (p) => p !== "nope" });
+  assert.equal(r.tasks, null);
+  assert.ok(r.errors.some((e) => /cycle/.test(e)));
+  assert.ok(r.errors.some((e) => /nope.*not a git repository/.test(e)));
+});
+
+test("checkTasksText: missing or broken files are one error each", () => {
+  const ctx = { specId: "PROJ-1", specPath: paths.spec, planText, isRepo: () => true };
+  assert.deepEqual(checkTasksText(null, ctx).errors, ["tasks.json isn't there yet"]);
+  assert.match(checkTasksText("{oops", ctx).errors[0], /not valid JSON/);
+  const ok = checkTasksText(JSON.stringify(good()), ctx);
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.tasks.items.length, 3);
+});
+
+test("errorsMessage lists every error for the plan agent", () => {
+  const m = errorsMessage("specs/PROJ-1/tasks.json", ["a is wrong", "b is wrong"]);
+  assert.match(m, /specs\/PROJ-1\/tasks\.json/);
+  assert.match(m, /1\. a is wrong\n2\. b is wrong/);
+});
+
+test("approveBlock: a plan in review can be approved, a drafting one can't", () => {
+  const plan = { ...state, phase: "plan", status: "review", pending: [] };
+  assert.equal(approveBlock(plan), null);
+  assert.match(approveBlock({ ...plan, status: "drafting" }), /drafting/);
+  assert.match(approveBlock({ ...plan, pending: [{}] }), /pending comment/);
+  assert.match(approveBlock({ ...state, phase: "build" }), /already/);
 });

@@ -2,6 +2,7 @@
 // (running herdr-task, writing prompt files, saving state) are passed in by io/herdr-task.js.
 import { orderItems, buildPrompt, addArgv, startArgv, planRetry } from "./tasks.js";
 import { resolveModels } from "./adapters.js";
+import { validateTasks } from "./tasks.js";
 
 /** `repo` (relative to the spec folder, "." for the folder itself) as a normalised absolute path. */
 export function resolveRepo(folder, repo) {
@@ -115,4 +116,24 @@ export function dispatchSummary(rows, dispatch) {
     .filter((r) => dispatch.modes?.[r.item.id] === "here")
     .map((r) => ({ id: r.item.id, ref: created[r.item.id], title: r.item.title, note: `${created[r.item.id]} runs in ${r.folder} itself, not in a worktree (worktrees are off for that repo).` }));
   return { total: rows.length, created: Object.keys(created).length, started: (dispatch.started ?? []).length, here };
+}
+
+/** Claude Code's transcript for a session: ~/.claude/projects/<folder with every non-alphanumeric as "-">/<session>.jsonl. */
+export function claudeSessionFile(home, folder, session) {
+  return `${home}/.claude/projects/${folder.replace(/[^A-Za-z0-9]/g, "-")}/${session}.jsonl`;
+}
+
+/** tasks.json text (null when missing) -> { tasks, errors, warnings }; tasks is null unless valid. */
+export function checkTasksText(text, ctx) {
+  if (text == null) return { tasks: null, errors: ["tasks.json isn't there yet"], warnings: [] };
+  let tasks;
+  try { tasks = JSON.parse(text); } catch (e) { return { tasks: null, errors: [`tasks.json is not valid JSON: ${e.message}`], warnings: [] }; }
+  const { errors, warnings } = validateTasks(tasks, ctx);
+  return { tasks: errors.length ? null : tasks, errors, warnings };
+}
+
+/** The message that sends a failed validation back to the plan agent. */
+export function errorsMessage(tasksPath, errors) {
+  const list = errors.map((e, i) => `${i + 1}. ${e}`).join("\n");
+  return `${tasksPath} has ${errors.length} error${errors.length === 1 ? "" : "s"}:\n\n${list}\n\nPlease fix them in place (and plan.md if they point there), then say what changed.`;
 }

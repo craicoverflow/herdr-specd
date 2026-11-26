@@ -65,10 +65,11 @@ test("approve: disabled with one pending comment, enabled with none", () => {
   assert.throws(() => planApproval({ adapter, state: withOne }), /pending comment/);
 });
 
-test("approve: not in review or not the spec phase gives a reason", () => {
+test("approve: not in review gives a reason; a plan in review can be approved (S7 dispatches it)", () => {
   const drafting = planNewSpec({ adapter, id: "D-1", brief: "x", existingIds: [] }).state;
   assert.match(approveBlock(drafting), /drafting/);
-  assert.match(approveBlock({ ...inReview(), phase: "plan" }), /dispatch/);
+  assert.equal(approveBlock({ ...inReview(), phase: "plan" }), null);
+  assert.match(approveBlock({ ...inReview(), phase: "build" }), /already approved/);
 });
 
 test("approve: Plan drafting, plan model, prompt names plan.md, Source spec, tasks.json, no todo.md", () => {
