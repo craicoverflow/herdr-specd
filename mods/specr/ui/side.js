@@ -41,11 +41,11 @@ function submitButton({ t, pending, status, submitting, onSubmit }) {
   return (ok ? b.cursor_pointer().on_click((_e, cx) => onSubmit(cx)) : b).child(label);
 }
 
-function approveButton({ t, approveBlock, approving, onApprove }) {
+function approveButton({ t, approveBlock, approving, onApprove, approveLabel }) {
   const ok = !approveBlock && !approving;
   const b = div().id("approve").w_full().py(6).rounded(6).text_size(13).font_semibold().text_center()
     .bg(ok ? t.accent : t.border).text_color(ok ? t.background : t.dim);
-  const button = (ok ? b.cursor_pointer().on_click((_e, cx) => onApprove(cx)) : b).child(approving ? "Approving…" : "Approve spec");
+  const button = (ok ? b.cursor_pointer().on_click((_e, cx) => onApprove(cx)) : b).child(approving ? "Approving…" : approveLabel ?? "Approve spec");
   return v_flex().gap(4).child(button)
     .children(approveBlock ? [div().text_size(11).text_color(t.muted).whitespace_normal().child(approveBlock)] : []);
 }

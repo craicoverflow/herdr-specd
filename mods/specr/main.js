@@ -9,7 +9,7 @@ import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsD
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
-import { submitReview, setOwner } from "./core/state.js";
+import { submitReview, setOwner, approve as approveState } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
@@ -22,6 +22,9 @@ import { list } from "./ui/list.js";
 import { documentView } from "./ui/document.js";
 import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
+import { dispatchView } from "./ui/dispatch.js";
+import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
+import { addTask, startTask, writePromptFile, loadTasks, parentMode } from "./io/herdr-task.js";
 
 const POLL_MS = 1000; // a safety net under watchFolder: the view is never more than this stale
 
@@ -46,6 +49,7 @@ export default class Specr extends View {
     this.sel = null; // the last settled selection as an anchor (ok) or { ok: false, reason }
     this.editing = null; // index of the pending comment being edited
     this.noteError = null;
+    this.dispatching = null; // S7: the dispatch view's data
     // A natural-size diagram window is this same mod opened with a `diagram` prop: it shows the picture only.
     this.zoom = props()?.diagram ?? null;
     if (this.zoom) return;
@@ -106,7 +110,7 @@ export default class Specr extends View {
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
-        await this.command(c);
+        await this.command(c, cx);
         cx.notify();
       }
     });
@@ -370,6 +374,7 @@ export default class Specr extends View {
       cx.notify();
       return;
     }
+    if (state.phase === "plan") return this.openDispatch(cx);
     this.approving = true;
     this.saving = true; // the poll must not reload state.json under a half-finished approval
     this.noteError = null;
@@ -391,6 +396,116 @@ export default class Specr extends View {
       } finally {
         this.approving = false;
         this.saving = false;
+      }
+      cx.notify();
+    });
+  }
+
+  // ---- dispatch (S7): handlers only; nothing is created until the person presses Confirm ---------
+
+  refreshPreviews() {
+    const d = this.dispatching;
+    if (!d?.rows) return;
+    const created = this.spec?.state.dispatch?.created ?? {};
+    d.previews = previewArgvs(d.rows, created, { review: d.review, adapter: d.adapter, parentMode: d.parentMode });
+  }
+
+  openDispatch(cx) {
+    this.dispatching = { loading: true };
+    this.noteError = null;
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const { state } = this.spec;
+        const { adapter } = await adapterFor(this.folder, state);
+        const config = await folderConfig(this.folder);
+        const r = await loadTasks(this.folder, state);
+        if (r.errors.length) {
+          this.dispatching = { errors: r.errors, warnings: r.warnings };
+        } else {
+          const rows = dispatchRows({ tasks: r.tasks, state, adapter, config, folder: this.folder, planText: r.planText ?? "" });
+          this.dispatching = {
+            adapter, rows, errors: [], warnings: r.warnings, review: Boolean(state.dispatch?.review),
+            parentMode: await parentMode(this.folder, state), summary: dispatchSummary(rows, state.dispatch ?? {}),
+          };
+          this.refreshPreviews();
+        }
+      } catch (e) {
+        this.dispatching = { errors: [`Couldn't check tasks.json: ${e.message ?? e}`] };
+      }
+      cx.notify();
+    });
+  }
+
+  confirmDispatch(cx) {
+    const d = this.dispatching;
+    if (!d?.rows || d.running || this.saving) return;
+    d.running = true;
+    d.error = null;
+    this.saving = true; // the poll must not reload state.json under a half-finished dispatch
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        d.parentMode = await parentMode(this.folder, this.spec.state); // the mode at Confirm
+        let state = this.spec.state;
+        const keep = async (next) => {
+          state = next;
+          await saveState(this.folder, state);
+          this.spec = { ...this.spec, state };
+        };
+        const r = await runDispatch({
+          rows: d.rows, dispatch: state.dispatch ?? {}, review: d.review, adapter: d.adapter, parentMode: d.parentMode,
+          add: addTask, start: startTask, writePrompt: writePromptFile,
+          save: async (dispatch) => { await keep({ ...state, dispatch }); d.summary = dispatchSummary(d.rows, dispatch); this.refreshPreviews(); cx.notify(); },
+        });
+        d.summary = dispatchSummary(d.rows, r);
+        d.error = r.error;
+        if (!r.error) {
+          await keep(approveState(state));
+          d.done = true;
+        }
+      } catch (e) {
+        d.error = `Couldn't dispatch: ${e.message ?? e}`;
+      } finally {
+        d.running = false;
+        this.saving = false;
+      }
+      this.refreshPreviews();
+      cx.notify();
+    });
+  }
+
+  toggleDispatchReview(cx) {
+    if (!this.dispatching?.rows || this.dispatching.running) return;
+    this.dispatching.review = !this.dispatching.review;
+    this.refreshPreviews();
+    cx.notify();
+  }
+
+  sendErrorsToPlan(cx) {
+    const d = this.dispatching;
+    if (!d?.errors?.length || d.sending) return;
+    d.sending = true;
+    d.error = null;
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const { state } = this.spec;
+        const text = errorsMessage(state.paths.tasks, d.errors);
+        const owner = state.owners?.plan;
+        if (ownerAlive(owner)) {
+          await sendMessage(owner.terminal, text);
+        } else {
+          const { adapter, models } = await adapterFor(this.folder, state);
+          const started = await startAgent(cx, { folder: this.folder, adapter, model: models.plan, name: `${state.id} plan`, message: firstMessage(state.paths.tasks, text) });
+          const next = setOwner(state, "plan", started);
+          await saveState(this.folder, next);
+          this.spec = { ...this.spec, state: next };
+        }
+        this.dispatching = null;
+      } catch (e) {
+        d.error = `Couldn't send: ${e.message ?? e}`;
+        d.sending = false;
       }
       cx.notify();
     });
@@ -527,6 +642,7 @@ export default class Specr extends View {
     this.sel = null;
     this.editing = null;
     this.noteError = null;
+    this.dispatching = null;
     await this.reload();
   }
 
@@ -537,7 +653,7 @@ export default class Specr extends View {
     await this.reload();
   }
 
-  async command(c) {
+  async command(c, cx) {
     if (c === "top") this.scroll.scroll_to_item(0);
     else if (c === "open-first") {
       if (this.selected == null) await this.reload();
@@ -546,6 +662,8 @@ export default class Specr extends View {
       this.at = Math.min(this.at + 1, Math.max(0, this.pieces.length - 1));
       this.scroll.scroll_to_item(this.at);
     } else if (c === "back") await this.back();
+    else if (c === "approve") this.approve(cx);
+    else if (c === "confirm") this.confirmDispatch(cx);
     else if (c === "new") {
       this.creating = { adapter: "agent-skills", folder: this.folder };
       await this.fillModels();
@@ -575,6 +693,12 @@ export default class Specr extends View {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
     }
+    if (this.dispatching && this.spec) {
+      return div().size_full().bg(t.background).text_color(t.foreground).child(
+        dispatchView({ t, d: this.dispatching, created: this.spec.state.dispatch?.created,
+          onConfirm: (cx) => this.confirmDispatch(cx), onToggle: (cx) => this.toggleDispatchReview(cx),
+          onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); } }));
+    }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");
     }
@@ -584,7 +708,7 @@ export default class Specr extends View {
         comments: { sel: this.sel, changes: this.changes, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
           onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx),
-          approveBlock: approveBlock(this.spec.state), approving: this.approving, onApprove: this.spec.state.phase === "spec" ? (cx) => this.approve(cx) : null,
+          approveBlock: approveBlock(this.spec.state), approving: this.approving, approveLabel: this.spec.state.phase === "plan" ? "Approve plan" : "Approve spec", onApprove: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? (cx) => this.approve(cx) : null,
           planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? checkSourceSpec(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
         diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },

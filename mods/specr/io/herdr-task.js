@@ -3,8 +3,7 @@
 import * as fs from "fs/promises";
 import { exec, home, readTextFile, writeTextFile } from "herdr";
 import { readPermissionModeFile } from "../core/tasks.js";
-import { claudeSessionFile, checkTasksText, parseAddResult } from "../core/dispatch.js";
-import { resolveRepo } from "../core/dispatch.js";
+import { claudeSessionFile, checkTasksText, parseAddResult, resolveRepo } from "../core/dispatch.js";
 
 const TIMEOUT = 60000;
 let found = null;
