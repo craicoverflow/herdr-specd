@@ -1,7 +1,7 @@
 // Reading spec state and documents from a folder. Effects live here; the logic is in core/.
 import * as fs from "fs/promises";
 import { readTextFile, writeTextFile } from "herdr";
-import { parseState, prepareWrite, currentDocPath } from "../core/state.js";
+import { parseState, prepareWrite, currentDocPath, shownDocPath } from "../core/state.js";
 import { planAdoption } from "../core/adopt.js";
 import { summarize, sortSummaries } from "../core/summary.js";
 import { findSpecs, matcher, pickPlan, parseDismissed, withDismissed } from "../core/found.js";
@@ -51,8 +51,7 @@ export async function loadSpec(folder, id) {
   const text = await read(`${specsDir(folder)}/${id}/state.json`);
   if (text == null) throw new Error(`No spec ${id} in this folder.`);
   const state = parseState(text);
-  const rel = currentDocPath(state) ?? state.paths?.spec ?? null;
-  const path = rel ? join(folder, rel) : null;
+  const path = shownDocPath(folder, state);
   return { state, path, doc: path ? await read(path) : null };
 }
 
@@ -98,7 +97,8 @@ async function writeFresh(path, text) {
  */
 export async function saveRound(folder, state, { doc, comments, file }) {
   const dir = `${specsDir(folder)}/${state.id}/rounds/${roundDir(state.phase, state.round)}`;
-  await fs.mkdir(dir, { recursive: true });
+  // No fs.mkdir: outside ~/.config/herdr-app, fs/promises writes never settle (e2e 2026-11-26).
+  // writeTextFile creates the missing folders itself.
   await writeFresh(`${dir}/${baseName(file)}`, doc);
   const record = reviewRecord({ id: state.id, phase: state.phase, round: state.round, file, comments, at: Date.now() });
   await writeFresh(`${dir}/review.json`, JSON.stringify(record, null, 2) + "\n");

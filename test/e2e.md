@@ -8,51 +8,62 @@ scratch folder. Each item below is one success criterion from
 Versions: agent-skills 0.6.18 · Claude Code 2.1.332 · mmdc 12.2.0 (spike install) · Herdr/Shepherdr 3.1.3 `herdr-task` ·
 macOS (Darwin 25.5.0).
 
-**Status of this run (2026-11-26):** the automated checks pass. The live, hand-driven items were
-**not run**: the worker that wrote this file could open the pane from the command line but could
-not choose its folder, type, click or select text in the Herdr window, so nothing below marked
-"manual" was done. Leave those boxes unticked until someone runs them and writes the date.
+**Live run, 2026-11-26** (Herdr.app 0.1.18, Shepherdr 3.1.3, Claude Code 2.1.332, agent-skills 0.6.18,
+Opus 5.5 plan agents, Sonnet workers). Driven from the shell with `tab.new {props: {folder}}` and the
+dev commands (`open-first`, `next`, `approve`, `confirm`) in scratch folders under `~/specr-e2e`.
+Items that need typing, clicking or selecting in the window were not done and stay unticked.
 
 ## Automated
 
-- [x] 9. `npm test` (179 pass) and `npm run check` pass. 2026-11-26, Node as installed, `herdr-app check mods/specr`.
+- [x] 9. `npm test` (185 pass) and `npm run check` pass, after the two fixes below.
 
-## Manual (each needs the live window)
+## Live results
 
-- [ ] 1. **S1** New spec with ID `DEMO-1` writes `specs/DEMO-1/spec.md`, not `SPEC.md`, in 3 of 3 runs. Date: ___ Model/skills: ___
-- [ ] 2. **S3** Comments on a paragraph, a table cell, two list items and text after a diagram report
-  lines that match `sed -n '<a>,<b>p'`. (Use `test/fixtures/specs/PROJ-123/spec.md`; the spike
-  checked the same cases from code, not by mouse.) Date: ___
-- [ ] 3. **S4** Submit puts exactly one message in the owner's terminal (`hc read`) and saves round 1.
-  With the owner closed, Submit opens a new `<ID> spec` tab that receives the review. Date: ___
-- [ ] 4. **S5** After the agent edits the file, round 2 marks the edited sections; every round-1
-  comment is anchored, "moved?" or outdated. Date: ___
-- [ ] 5. **S6** Approve is disabled with a pending comment. Approving the spec writes `plan.md` and
-  `tasks.json` at their spec-folder paths and no `tasks/todo.md` (check with agent-skills 0.6.x and
-  an older install). Date: ___
-- [ ] 6. **S7** A `tasks.json` with a cycle and an unknown repo shows both errors and creates no
-  tasks. A valid two-repo file with one checkpoint creates every item with the right `--folder`,
-  `--after`, `--model`, titled `DEMO-1 · …`. Re-running after a forced failure creates only the
-  missing items. With the plan agent in auto mode every item's `queue.argv` ends in
-  `--permission-mode auto`; in another mode, none does. Date: ___
-  (Clean up the created tasks afterwards: `herdr-task rm`.)
-- [ ] 7. **S8** Both fixture diagrams render in dark and light; with `mmdc` off `PATH` they show as
-  source with the install note. Date: ___
-- [ ] 8. **S2** Adopting `PROJ-9.md` leaves the file in place and reviews it like any other spec. Date: ___
-- [ ] 10. **S11** With specr open, `specs/PROJ-9/spec.md`, `SPEC.md` and `SPEC-auth.md` written by
-  hand are each listed under Found within 2 s with one notification. Adopt opens them with the IDs
-  `PROJ-9`, the typed one, and `auth`; a `tasks/plan.md` whose `Source spec:` names `SPEC.md` is
-  attached. Dismiss survives a restart. `docs/notes.md` and `specs/PROJ-9/notes.md` are never offered. Date: ___
+- [ ] 1. **S1** Not run through the dialog (typing needed). HS-14's evidence stands: 3 of 3 headless
+  runs of specr's exact first message wrote only `specs/DEMO-1/spec.md`.
+- [ ] 2. **S3** Not run (mouse selections). Covered in code by the anchors tests only.
+- [ ] 3. **S4** Not run (Submit click). Bug 3 below also hung Submit's `saveRound`; fixed, not yet seen live.
+- [ ] 4. **S5** Not run (needs a submitted round).
+- [x] 5. **S6** Approve is disabled with a pending comment ("Submit or remove the 1 pending comment
+  first"). Approving starts the plan agent (`--session-id` recorded). 3 of 3 runs wrote `plan.md`
+  starting with its `Source spec:` line and `tasks.json` at the spec folder's paths, no `tasks/todo.md`,
+  and the spec moved to Plan · review by itself. Older agent-skills install not checked.
+  Only 1 of 3 `tasks.json` files was valid on its own merit (Bug 1, now fixed; a fourth run after the
+  fix was valid).
+- [x] 6. **S7** (after fixing Bugs 3 and 4) Invalid `tasks.json` (DEMO-2's own, and a cycle plus an
+  unknown repo) shows every error and creates nothing. A valid two-repo file with a checkpoint creates
+  every item titled `DEMO-1 · …` with the right `--folder`, `--model` and `--after` (the checkpoint
+  waits across repos). A forced failure (`web/.git` hidden after the preview) created only `t1`; the
+  re-run created only `t2` and `c1` and kept `t1`'s ref. Plan agent in auto mode: every stored argv
+  ends in `--permission-mode auto`; in manual mode: none does (Settings' `default`).
+- [x] 7. **S8** Both fixture diagrams render in the window (dark); with `mmdc` off `PATH` they show as
+  source with the install note. Light theme checked headlessly with specr's own `mmdcArgs`
+  (`-t default -b transparent`); a live theme switch was skipped (it would change the person's layout).
+- [ ] 8. **S2** Not run (file picker).
+- [ ] 10. **S11** Partly: four specs written by hand (`specs/PROJ-8/spec.md`, `SPEC.md`, `SPEC-auth.md`,
+  `spec/billing.md`) were all listed under Found within 2 s with one notification each, and
+  `docs/notes.md` and `specs/PROJ-8/notes.md` were never offered. Adopt and Dismiss not clicked.
+- [x] **S9** Build lists the items by repo with Shepherdr's state and `0/3 done`, polling every 10 s.
+- [ ] **S10** Not checked with several specs in one folder.
+- [ ] Wide diagram click-to-zoom: not clicked.
 
-## Also check by hand
+## Bugs found
 
-- [ ] S9: after dispatch, Build lists items by repo with Shepherdr state and `n/m done`, refreshing every 10 s.
-- [ ] S10: with several specs in the folder, the list shows ID, title, phase, pending, tasks.
-- [ ] Wide diagram: click opens it at natural size, scrollable.
+1. **Fixed:** the plan prompt (`core/instructions.js`, `planInstructions`) never gave the `tasks.json`
+   schema, only "tasks.json, version 1". DEMO-1's agent read specr's installed `core/tasks.js` to learn
+   it; DEMO-3's copied DEMO-1's file; DEMO-2's invented its own. The prompt now carries a JSON example
+   (`tasksExample`, checked against `validateTasks` in `test/instructions.test.mjs`) and the rules.
+   Live re-run (DEMO-4): valid `tasks.json` with no validator errors, without reading specr's source.
+2. **Fixed:** in Plan · drafting the pane said "The plan document isn't there yet (…/spec.md)": after
+   Approve it kept the spec's path. `shownDocPath` now gives the phase document's path (test added).
+3. **Fixed:** in a mod, `fs/promises` writes outside `~/.config/herdr-app` never settle. `writePromptFile`
+   (dispatch) and `saveRound` (Submit) called `fs.mkdir` there, so Confirm silently did nothing (and every
+   later Confirm was ignored). Herdr's `writeTextFile` creates missing folders itself; the `fs.mkdir`
+   calls are gone.
+4. **Fixed:** Claude Code 2.1.x records the mode in `{"type":"permission-mode"}` entries (also on a
+   shift+tab switch with no message), not only on user entries, so `readPermissionMode` returned
+   nothing and workers never inherited auto mode. It now reads both; test added.
 
-## Partial evidence from this run
-
-On 2026-11-26 the mod was installed with `npm run link`, `herdr-app check` passed, and a scratch
-folder with a seeded spec and three pending comments was prepared. Opening the pane on it from the
-CLI showed "No specs in this folder yet." because the folder could not be set, so no review-pane
-screenshot was taken.
+Nits: a Found notification for `specs/PROJ-8/spec.md` says "spec.md" rather than the ID; after
+dispatch the view still says "Nothing runs until you confirm"; a phase agent started in a folder
+Claude hasn't seen before waits at Claude's "trust this folder?" prompt and specr doesn't show it.

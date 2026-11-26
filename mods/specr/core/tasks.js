@@ -172,14 +172,18 @@ export function startArgv(ref, { folder, parentMode, workerArgv }) {
   return argv;
 }
 
-/** Latest `permissionMode` on a user entry of a Claude transcript (.jsonl text). */
+/**
+ * The session's current mode: the latest `permissionMode` in a Claude transcript (.jsonl text), from
+ * a user entry or a "permission-mode" entry (Claude Code 2.1.x writes the latter, also on a mode
+ * switch with no user message).
+ */
 export function readPermissionMode(text) {
   let mode;
   for (const line of String(text).split("\n")) {
     if (!line.trim()) continue;
     let e;
     try { e = JSON.parse(line); } catch { continue; }
-    if (e?.type === "user" && typeof e.permissionMode === "string") mode = e.permissionMode;
+    if ((e?.type === "user" || e?.type === "permission-mode") && typeof e.permissionMode === "string") mode = e.permissionMode;
   }
   return mode;
 }

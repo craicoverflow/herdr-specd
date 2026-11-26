@@ -35,7 +35,8 @@ async function read(path) {
 
 /** Write a prompt file (replacing what an earlier try left). */
 export async function writePromptFile(path, text) {
-  await fs.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+  // No fs.mkdir: outside ~/.config/herdr-app, fs/promises writes never settle (e2e 2026-11-26),
+  // which hung Confirm. writeTextFile creates the missing folders itself.
   await writeTextFile(path, text, await read(path));
 }
 

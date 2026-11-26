@@ -141,8 +141,8 @@ and dispatch it with specr.
   `todo` and doesn't run, so specr then runs `herdr-task start <ref>` for each item: items whose
   dependencies aren't done become `queued` and start by themselves.
 - **Workers inherit auto mode from their parent.** The parent is the plan's owner agent. When its
-  Claude Code session is in auto mode at Confirm (the `permissionMode` of the latest user entry
-  in its session transcript, found through the `--session-id` specr started it with), specr starts
+  Claude Code session is in auto mode at Confirm (the latest `permissionMode` in its session
+  transcript, found through the `--session-id` specr started it with), specr starts
   each item with `herdr-task start <ref> --argv <worker argv ending in --permission-mode auto>`.
   Otherwise, or when the parent is unknown (an adopted plan), Shepherdr's Settings decide. Only
   `auto` is inherited, never `bypassPermissions` or any other mode. Shepherdr stores this argv in
@@ -517,8 +517,13 @@ sections or a diagram.
   starts it with exactly that later; without `--argv`, Settings' worker argv is stored at that
   moment, so later Settings changes don't reach queued tasks. `start` on an already queued task
   starts it at once, skipping its dependencies; `reopen` returns a queued task to `todo`.
-- Claude Code records the session's mode as `"permissionMode"` on each user entry of its
-  transcript (`~/.claude/projects/<folder slug>/<session id>.jsonl`).
+- Claude Code records the session's mode as `"permissionMode"` in its transcript
+  (`~/.claude/projects/<folder slug>/<session id>.jsonl`): on user entries and, in 2.1.x, on
+  `{"type":"permission-mode"}` entries, which a shift+tab switch writes with no user message.
+  The latest of either is the current mode (corrected by the e2e run; the first version read user
+  entries only).
+- In a mod, `fs/promises` writes outside `~/.config/herdr-app` never settle (found in the e2e run);
+  write with Herdr's `writeTextFile`, which also creates missing folders.
 - Herdr doesn't hot-reload a mod through a symlinked folder (found in Task 1), so
   `npm run link` copies `mods/specr` instead; re-run it after each change.
 

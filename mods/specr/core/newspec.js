@@ -34,7 +34,7 @@ export function planApproval({ adapter, state, config }) {
   if (next.phase !== "plan") throw new Error("Only a spec in review is approved here.");
   const chosen = resolveModels(adapter, config, next);
   const { spec, plan, tasks } = state.paths;
-  const message = fillPrompt(adapter, "plan", { brief: state.brief, specPath: spec, planPath: plan, tasksPath: tasks });
+  const message = fillPrompt(adapter, "plan", { id: state.id, brief: state.brief, specPath: spec, planPath: plan, tasksPath: tasks });
   return { state: next, model: chosen.plan, message };
 }
 

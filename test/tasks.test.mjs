@@ -184,6 +184,19 @@ test("readPermissionMode: latest permissionMode on a user entry", () => {
   assert.equal(readPermissionMode(jsonl({ type: "user" })), undefined);
   assert.equal(readPermissionMode(""), undefined);
 });
+test("readPermissionMode: Claude Code 2.1.x permission-mode entries count, latest wins", () => {
+  // Seen live (e2e 2026-11-26): the mode lives in {"type":"permission-mode"} entries, and a mode
+  // switch (shift+tab) writes one without any user entry.
+  const text = jsonl(
+    { type: "user", permissionMode: "auto" },
+    { type: "permission-mode", permissionMode: "auto" },
+    { type: "assistant", message: {} },
+    { type: "permission-mode", permissionMode: "default" },
+  );
+  assert.equal(readPermissionMode(text), "default");
+  assert.equal(readPermissionMode(jsonl({ type: "permission-mode", permissionMode: "auto" })), "auto");
+  assert.equal(readPermissionMode(jsonl({ type: "summary", permissionMode: "auto" })), undefined);
+});
 test("readPermissionModeFile: reads a fixture, nothing for a missing file", async () => {
   const dir = mkdtempSync(join(tmpdir(), "specr-"));
   const f = join(dir, "s.jsonl");

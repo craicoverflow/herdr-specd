@@ -122,6 +122,13 @@ export function currentDocPath(s) {
   return s.phase === "spec" || s.phase === "plan" ? (s.paths?.[s.phase] ?? null) : null;
 }
 
+/** The absolute path of the document the pane shows: the phase document, else the spec. Absolute paths (adopted files) are kept. */
+export function shownDocPath(folder, s) {
+  const rel = currentDocPath(s) ?? s.paths?.spec ?? null;
+  if (!rel) return null;
+  return rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`;
+}
+
 function validate(s) {
   if (!s || typeof s !== "object") throw new Error("state.json is not an object.");
   if (typeof s.id !== "string") throw new Error("state.json has no id.");

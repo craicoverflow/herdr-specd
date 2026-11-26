@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   STATE_VERSION, createSpec, adoptSpec, parseState, serializeState, prepareWrite,
-  documentReady, approve, submitReview, setOwner, finishBuild, currentDocPath,
+  documentReady, approve, submitReview, setOwner, finishBuild, currentDocPath, shownDocPath,
 } from "../mods/specr/core/state.js";
 
 const base = { id: "PROJ-123", brief: "do it", adapter: "agent-skills" };
@@ -146,6 +146,15 @@ test("currentDocPath: spec/plan phase document", () => {
   assert.equal(currentDocPath(s), paths.spec);
   assert.equal(currentDocPath(approve(s)), paths.plan);
   assert.equal(currentDocPath(finishBuild(approve(documentReady(approve(s))))), null);
+});
+
+test("shownDocPath: follows the phase, keeps absolute paths (e2e 2026-11-26: plan view showed the spec path)", () => {
+  const s = inReview();
+  assert.equal(shownDocPath("/w", s), "/w/specs/PROJ-123/spec.md");
+  assert.equal(shownDocPath("/w/", approve(s)), "/w/specs/PROJ-123/plan.md");
+  assert.equal(shownDocPath("/w", finishBuild(approve(documentReady(approve(s))))), "/w/specs/PROJ-123/spec.md");
+  const adopted = { ...s, paths: { ...s.paths, spec: "/elsewhere/PROJ-9.md" } };
+  assert.equal(shownDocPath("/w", adopted), "/elsewhere/PROJ-9.md");
 });
 
 test("state.json: round-trips through serialize and parse", () => {

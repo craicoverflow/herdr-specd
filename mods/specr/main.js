@@ -9,7 +9,7 @@ import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsD
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
-import { submitReview, setOwner, approve as approveState } from "./core/state.js";
+import { submitReview, setOwner, approve as approveState, shownDocPath } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
@@ -395,7 +395,7 @@ export default class Specr extends View {
         const started = await startAgent(cx, { folder: this.folder, adapter, model: plan.model, name: `${state.id} plan`, message: plan.message });
         const next = setOwner(plan.state, "plan", started);
         await saveState(this.folder, next);
-        this.spec = { ...this.spec, state: next, doc: null };
+        this.spec = { ...this.spec, state: next, path: shownDocPath(this.folder, next), doc: null }; // the plan's path, not the spec's
         this.pieces = [];
         this.changes = null;
         this.sel = null;
