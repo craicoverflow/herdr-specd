@@ -2,7 +2,7 @@
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
+import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, window, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
@@ -24,7 +24,9 @@ import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { dispatchView } from "./ui/dispatch.js";
 import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
-import { addTask, startTask, writePromptFile, loadTasks, parentMode } from "./io/herdr-task.js";
+import { addTask, startTask, writePromptFile, loadTasks, parentMode, listTasks, loadItems } from "./io/herdr-task.js";
+import { buildView } from "./ui/build.js";
+import { buildGroups, repoFolders, shouldPoll, POLL_MS as BUILD_POLL_MS } from "./core/build.js";
 
 const POLL_MS = 1000; // a safety net under watchFolder: the view is never more than this stale
 
@@ -106,6 +108,10 @@ export default class Specr extends View {
         this.renderDiagrams(cx);
       }
     });
+    // S9: poll Shepherdr every 10 s, only while the window is visible and the spec is in build.
+    cx.timer.every(BUILD_POLL_MS, (cx) => {
+      cx.spawn(async (cx) => { await this.pollBuild(); cx.notify(); });
+    });
     // Dev command loop: herdr-app do specr.<top|open-first|next|back>
     cx.spawn(async (cx) => {
       for (;;) {
@@ -171,6 +177,8 @@ export default class Specr extends View {
             this.error = null;
             changed = true;
             this.diagramsDirty = true;
+            this.build = null;
+            await this.pollBuild(); // first fill; reload only runs from tasks and timers
           }
         } catch (e) {
           if (this.error !== String(e.message)) changed = true;
@@ -399,6 +407,30 @@ export default class Specr extends View {
       }
       cx.notify();
     });
+  }
+
+  // ---- build status (S9): polled from a timer, never from render() ------------------------------
+
+  async pollBuild() {
+    const state = this.spec?.state;
+    if (!shouldPoll({ visible: window()?.visible, phase: state?.phase, busy: this.buildBusy })) return;
+    this.buildBusy = true;
+    try {
+      const items = await loadItems(this.folder, state);
+      const dirs = repoFolders(items, this.folder);
+      const lists = {};
+      await Promise.all(dirs.map(async (d) => { lists[d] = await listTasks(d); }));
+      this.build = buildGroups({ items, created: state.dispatch?.created, lists, folder: this.folder });
+    } finally {
+      this.buildBusy = false;
+    }
+  }
+
+  // Clicking an item: no Herdr command opens a task in the Tasks tab, so copy its ref.
+  copyRef(ref, cx) {
+    cx.write_to_clipboard(ref);
+    this.copied = ref;
+    cx.notify();
   }
 
   // ---- dispatch (S7): handlers only; nothing is created until the person presses Confirm ---------
@@ -701,6 +733,11 @@ export default class Specr extends View {
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");
+    }
+    if (this.spec.state.phase === "build") {
+      return div().size_full().bg(t.background).text_color(t.foreground).child(
+        buildView({ t, id: this.spec.state.id, build: this.build, copied: this.copied, onCopy: (r, cx) => this.copyRef(r, cx),
+          onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }) }));
     }
     return div().size_full().bg(t.background).text_color(t.foreground).child(
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,

@@ -61,3 +61,14 @@ export async function parentMode(folder, state) {
   if (!session) return undefined;
   return readPermissionModeFile(claudeSessionFile(home(), folder, session), (p, enc) => fs.readFile(p, enc));
 }
+
+/** Listed tasks of one repo folder (`herdr-task list --json`); null when it can't be listed. */
+export async function listTasks(dir) {
+  try { return JSON.parse(await runTask(["herdr-task", "list", "--json", "--folder", dir]))?.tasks ?? null; } catch { return null; }
+}
+
+/** tasks.json's items for the build view; [] when unreadable. */
+export async function loadItems(folder, state) {
+  const p = state.paths.tasks;
+  try { const items = JSON.parse((await read(p.startsWith("/") ? p : resolveRepo(folder, p))) ?? "null")?.items; return Array.isArray(items) ? items : []; } catch { return []; }
+}
