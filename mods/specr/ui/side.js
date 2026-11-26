@@ -50,6 +50,19 @@ function approveButton({ t, approveBlock, approving, onApprove }) {
     .children(approveBlock ? [div().text_size(11).text_color(t.muted).whitespace_normal().child(approveBlock)] : []);
 }
 
+const STATUS = { anchored: "anchored", moved: "moved?", outdated: "outdated" };
+
+// Last round's comments, read-only, each with where it landed in the current file.
+function lastRoundCard({ t, c, i }) {
+  const color = c.status === "outdated" ? t.blocked : c.status === "moved" ? t.working : t.muted;
+  return v_flex().gap(4).p(8).rounded(6).border_1().border_color(t.border)
+    .child(h_flex().justify_between().gap(8)
+      .child(div().text_size(12).font_semibold().text_color(t.muted).child(c.status === "outdated" ? `Was ${range(c.lines)}` : range(c.lines)))
+      .child(div().id(`last-${i}`).text_size(11).font_semibold().text_color(color).child(STATUS[c.status])))
+    .child(div().text_size(12).text_color(t.dim).whitespace_normal().child(`> ${clip(c.quote.split("\n")[0], 80)}`))
+    .child(div().text_size(13).text_color(t.muted).whitespace_normal().child(c.body));
+}
+
 export function sidePanel(p) {
   const { t, pending, error } = p;
   const label = (s) => div().text_size(11).font_semibold().text_color(t.dim).child(s.toUpperCase());
@@ -58,6 +71,8 @@ export function sidePanel(p) {
     .child(selection({ t, sel: p.sel, input: p.input }))
     .child(label(`Pending comments · ${pending.length}`))
     .children(pending.length ? pending.map((c, i) => card({ ...p, c, i })) : [div().text_size(13).text_color(t.muted).child("None yet.")])
+    .children(p.changes?.comments.length ? [label(`Last round · ${p.changes.comments.length}`)] : [])
+    .children((p.changes?.comments ?? []).map((c, i) => lastRoundCard({ t, c, i })))
     .children(pending.length || p.submitting ? [submitButton(p)] : [])
     .children(p.onApprove ? [approveButton(p)] : [])
     .children(error ? [div().text_size(12).text_color(t.blocked).whitespace_normal().child(error)] : []);

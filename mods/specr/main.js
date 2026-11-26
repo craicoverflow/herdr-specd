@@ -4,7 +4,8 @@ import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
 import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, saveState, createState, usedIds, submittedDoc, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
+import { roundChanges } from "./core/rounds.js";
+import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
@@ -37,6 +38,8 @@ export default class Specr extends View {
     this.selected = null; // spec ID
     this.spec = null; // { state, path, doc }
     this.pieces = [];
+    this.changes = null; // S5: the diff against last round's copy
+    this.changedOnly = false;
     this.error = null;
     this.scroll = ScrollHandle.new();
     this.at = 0; // piece index for the `next` dev command
@@ -151,7 +154,8 @@ export default class Specr extends View {
       } else {
         try {
           const spec = await loadSpec(this.folder, this.selected);
-          const ready = autoReview(spec.state, spec.doc, await submittedDoc(this.folder, spec.state));
+          const last = await lastRound(this.folder, spec.state);
+          const ready = autoReview(spec.state, spec.doc, last?.doc ?? null);
           if (ready) {
             await saveState(this.folder, ready);
             spec.state = ready;
@@ -159,6 +163,7 @@ export default class Specr extends View {
           if (spec.doc !== this.spec?.doc || JSON.stringify(spec.state) !== JSON.stringify(this.spec?.state)) {
             this.spec = spec;
             this.pieces = spec.doc == null ? [] : pieces(spec.doc);
+            this.changes = last && spec.doc != null && spec.state.status === "review" ? roundChanges(last.doc, spec.doc, last.comments) : null;
             this.error = null;
             changed = true;
             this.diagramsDirty = true;
@@ -379,6 +384,7 @@ export default class Specr extends View {
         await saveState(this.folder, next);
         this.spec = { ...this.spec, state: next, doc: null };
         this.pieces = [];
+        this.changes = null;
         this.sel = null;
       } catch (e) {
         this.noteError = `Couldn't approve: ${e.message ?? e}`;
@@ -574,7 +580,8 @@ export default class Specr extends View {
     }
     return div().size_full().bg(t.background).text_color(t.foreground).child(
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,
-        comments: { sel: this.sel, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
+        changes: this.changes, changedOnly: this.changedOnly, onToggleChanged: (cx) => { this.changedOnly = !this.changedOnly; cx.notify(); },
+        comments: { sel: this.sel, changes: this.changes, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
           onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx),
           approveBlock: approveBlock(this.spec.state), approving: this.approving, onApprove: this.spec.state.phase === "spec" ? (cx) => this.approve(cx) : null,
