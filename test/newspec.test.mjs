@@ -44,3 +44,9 @@ test("autoReview: drafting with the document present moves to review, once", () 
   assert.equal(autoReview(state, "# Spec").status, "review");
   assert.equal(autoReview({ ...state, status: "review" }, "# Spec"), null);
 });
+
+test("autoReview: after a submitted round, waits until the document differs from what was submitted", () => {
+  const { state } = planNewSpec({ adapter, id: "A-1", brief: "x", existingIds: [] });
+  assert.equal(autoReview(state, "# Spec", "# Spec"), null);
+  assert.equal(autoReview(state, "# Spec v2", "# Spec").status, "review");
+});

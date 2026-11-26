@@ -11,6 +11,12 @@
     }
     ,
     {
+      "title": "specr: New spec",
+      "command": "tab.new",
+      "args": { "mod": "specr", "name": "specr new", "focus": true, "props": { "new": true } },
+      "words": "new start create spec brief draft"
+    },
+    {
       "title": "specr: Adopt spec",
       "command": "tab.new",
       "args": { "mod": "specr", "name": "specr adopt", "focus": true, "props": { "adopt": true } },

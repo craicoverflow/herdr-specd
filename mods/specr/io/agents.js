@@ -25,6 +25,16 @@ export async function adapterFor(folder, state) {
   return { adapter, models: resolveModels(adapter, config, state) };
 }
 
+/** The installed adapter with this ID (S1 picks it in the dialog before a spec record exists). */
+export async function loadAdapterById(id) {
+  const text = await readTextFile(`${appHome()}/mods/specr/adapters/${id}.json`);
+  if (text == null) throw new Error(`No adapter "${id}" is installed.`);
+  return loadAdapter(text);
+}
+
+/** The folder's .specr/config.json, or null. */
+export const folderConfig = (folder) => readJson(`${folder}/.specr/config.json`);
+
 /** The adapter new specs use (S11 scans with its patterns before any spec record exists). */
 export async function defaultAdapter() {
   const text = await readTextFile(`${appHome()}/mods/specr/adapters/agent-skills.json`);

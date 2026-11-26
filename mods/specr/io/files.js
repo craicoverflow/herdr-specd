@@ -80,6 +80,14 @@ export async function adoptFiles(folder, { id, spec, plan, tasks }) {
   return state;
 }
 
+/** S1: write a new spec's state.json (refused when the ID is taken); returns nothing. */
+export async function createState(folder, state) {
+  if ((await usedIds(folder)).includes(state.id)) {
+    throw Object.assign(new Error(`A spec with ID ${state.id} already exists in this folder.`), { code: "used", id: state.id });
+  }
+  await writeTextFile(`${specsDir(folder)}/${state.id}/state.json`, prepareWrite(state, null), null);
+}
+
 async function writeFresh(path, text) {
   await writeTextFile(path, text, await read(path)); // a retry after a half-finished Submit replaces what it left
 }
@@ -145,4 +153,12 @@ export async function adoptFound(folder, adapter, found, id) {
   for (const p of candidates) plans[p] = (await read(`${folder}/${p}`)) ?? "";
   const plan = pickPlan(adapter, found.path, plans);
   return adoptFiles(folder, { id, spec: `${folder}/${found.path}`, plan: plan ? `${folder}/${plan}` : null, tasks: null });
+}
+
+/** The document text kept at the last Submit (round n-1), or null when there was none. */
+export async function submittedDoc(folder, state) {
+  if (state.round <= 1) return null;
+  const file = currentDocPath(state);
+  if (!file) return null;
+  return read(`${specsDir(folder)}/${state.id}/rounds/${roundDir(state.phase, state.round - 1)}/${baseName(file)}`);
 }

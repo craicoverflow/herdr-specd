@@ -2,16 +2,18 @@
 // Never start async work from render() (spike finding): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, notify, openOverlay, closeOverlay, checking, pickFiles } from "herdr";
+import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { loadSpecs, loadSpec, saveState, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
-import { adapterFor, defaultAdapter, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
+import { loadSpecs, loadSpec, saveState, createState, usedIds, submittedDoc, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
+import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
 import { submitReview, setOwner } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
+import { newView } from "./ui/new.js";
+import { planNewSpec, autoReview } from "./core/newspec.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
@@ -58,6 +60,17 @@ export default class Specr extends View {
     this.adoptInput = InputState.new({ placeholder: "PROJ-9" });
     this.adoptError = null;
     this.adoptInput.on("submit", (_e, cx) => this.submitAdopt(cx));
+    this.newInputs = {
+      id: InputState.new({ placeholder: "PROJ-9" }),
+      brief: InputState.new({ placeholder: "What should be built?" }),
+      model: InputState.new({ placeholder: "opus" }),
+      effort: InputState.new({ placeholder: "high" }),
+    };
+    this.creating = props()?.new ? { adapter: "agent-skills", folder: this.folder } : null; // the New spec dialog
+    this.newError = null;
+    this.newInputs.id.on("submit", (_e, cx) => this.startNew(cx));
+    this.newInputs.brief.on("submit", (_e, cx) => this.startNew(cx));
+    if (this.creating) cx.spawn(async (cx) => { await this.fillModels(); cx.notify(); });
     if (!this.folder) return;
 
     cx.spawn(async (cx) => {
@@ -137,6 +150,11 @@ export default class Specr extends View {
       } else {
         try {
           const spec = await loadSpec(this.folder, this.selected);
+          const ready = autoReview(spec.state, spec.doc, await submittedDoc(this.folder, spec.state));
+          if (ready) {
+            await saveState(this.folder, ready);
+            spec.state = ready;
+          }
           if (spec.doc !== this.spec?.doc || JSON.stringify(spec.state) !== JSON.stringify(this.spec?.state)) {
             this.spec = spec;
             this.pieces = spec.doc == null ? [] : pieces(spec.doc);
@@ -335,6 +353,79 @@ export default class Specr extends View {
     });
   }
 
+  // ---- new spec (S1): handlers only ------------------------------------------------------------
+
+  async fillModels() {
+    try {
+      const adapter = await loadAdapterById(this.creating.adapter);
+      const m = adapter.phases.spec;
+      this.newInputs.model.set_value(m.model);
+      this.newInputs.effort.set_value(m.effort ?? "");
+    } catch (e) {
+      this.newError = { message: String(e?.message ?? e) };
+    }
+  }
+
+  startNewForm(cx) {
+    this.creating = { adapter: "agent-skills", folder: this.folder };
+    this.newError = null;
+    this.newInputs.id.set_value("");
+    this.newInputs.brief.set_value("");
+    cx.spawn(async (cx) => { await this.fillModels(); cx.notify(); });
+    cx.notify();
+  }
+
+  changeNewFolder(cx) {
+    cx.spawn(async (cx) => {
+      const f = await pickFolder({ prompt: "Choose the folder for the spec" });
+      if (f) {
+        this.folder = f;
+        this.creating = { ...this.creating, folder: f };
+        this.listKey = null;
+      }
+      cx.notify();
+    });
+  }
+
+  startNew(cx) {
+    if (this.newBusy || !this.creating) return;
+    this.newBusy = true;
+    this.newError = null;
+    cx.notify();
+    cx.spawn(async (cx) => {
+      let id = null;
+      try {
+        const adapter = await loadAdapterById(this.creating.adapter);
+        const config = await folderConfig(this.folder);
+        const model = this.newInputs.model.value().trim();
+        const effort = this.newInputs.effort.value().trim();
+        const { state, model: chosen, message } = planNewSpec({
+          adapter, config, id: this.newInputs.id.value(), brief: this.newInputs.brief.value(),
+          existingIds: await usedIds(this.folder),
+          models: model ? { spec: { model, ...(effort ? { effort } : {}) } } : undefined,
+        });
+        id = state.id;
+        await createState(this.folder, state);
+        const started = await startAgent(cx, { folder: this.folder, adapter, model: chosen, name: `${state.id} spec`, message });
+        await saveState(this.folder, setOwner(state, "spec", started));
+        this.creating = null;
+        await this.open(state.id);
+      } catch (e) {
+        this.newError = { message: String(e?.message ?? e), usedId: e?.code === "used" ? e.id : null };
+        if (id && e?.code !== "used") this.newError.message = `${this.newError.message} The spec ${id} was created; open it from the list.`;
+      } finally {
+        this.newBusy = false;
+      }
+      cx.notify();
+    });
+  }
+
+  openUsed(id, cx) {
+    this.creating = null;
+    this.newError = null;
+    cx.spawn(async (cx) => { await this.open(id); cx.notify(); });
+  }
+
   // ---- adopt (S2): handlers only ---------------------------------------------------------------
 
   startAdopt(cx) {
@@ -412,7 +503,10 @@ export default class Specr extends View {
       this.at = Math.min(this.at + 1, Math.max(0, this.pieces.length - 1));
       this.scroll.scroll_to_item(this.at);
     } else if (c === "back") await this.back();
-    else if (c === "adopt") {
+    else if (c === "new") {
+      this.creating = { adapter: "agent-skills", folder: this.folder };
+      await this.fillModels();
+    } else if (c === "adopt") {
       this.adopting = { spec: null, plan: null, tasks: null };
       this.adoptInput.set_value("");
     }
@@ -422,6 +516,12 @@ export default class Specr extends View {
     const t = theme();
     if (this.zoom) return zoomView({ t, pic: this.zoom, onClose: () => closeOverlay(props().overlay) });
     if (!this.folder) return div().size_full().p(16).bg(t.background).text_color(t.foreground).child("No folder: focus a terminal first");
+    if (this.creating) {
+      return div().size_full().bg(t.background).text_color(t.foreground).child(
+        newView({ t, form: this.creating, inputs: this.newInputs, error: this.newError, busy: this.newBusy,
+          onChangeFolder: (cx) => this.changeNewFolder(cx), onOpenUsed: (id, cx) => this.openUsed(id, cx),
+          onStart: (cx) => this.startNew(cx), onCancel: (cx) => { this.creating = null; this.newError = null; cx.notify(); } }));
+    }
     if (this.adopting) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         adoptView({ t, form: this.adopting, input: this.adoptInput, error: this.adoptError,
@@ -430,7 +530,7 @@ export default class Specr extends View {
     }
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
+        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");

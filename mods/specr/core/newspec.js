@@ -15,8 +15,12 @@ export function planNewSpec({ adapter, id, brief, existingIds, models, config })
   return { state, model: chosen.spec, message };
 }
 
-/** The new state when a drafting spec's document has appeared, else null. */
-export function autoReview(state, doc) {
+/**
+ * The new state when a drafting spec's document has appeared, else null. `submitted` is the text
+ * kept at the last Submit: the agent hasn't revised until the document differs from it.
+ */
+export function autoReview(state, doc, submitted = null) {
   if (state.status !== "drafting" || doc == null || !doc.trim()) return null;
+  if (submitted != null && doc === submitted) return null;
   return documentReady(state);
 }
