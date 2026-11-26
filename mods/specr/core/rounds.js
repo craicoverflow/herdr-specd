@@ -61,3 +61,13 @@ export function reanchor(_oldDoc, newDoc, comments) {
     };
   });
 }
+
+// Everything the document view needs about the last round: tagged sections, removed sections,
+// last round's comments re-found in newDoc, and statusAt(offset) -> the status of the section
+// holding that offset. null when there is no last round, or nothing differs and no comments.
+export function roundChanges(oldDoc, newDoc, oldComments = []) {
+  if (oldDoc == null || newDoc == null) return null;
+  const { sections: secs, removed } = diffSections(oldDoc, newDoc);
+  const statusAt = (at) => (secs.find((s) => at >= s.start && at < s.end) ?? secs[secs.length - 1])?.status ?? "unchanged";
+  return { sections: secs, removed, comments: reanchor(oldDoc, newDoc, oldComments), statusAt };
+}

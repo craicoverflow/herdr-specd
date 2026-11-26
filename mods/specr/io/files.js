@@ -162,3 +162,16 @@ export async function submittedDoc(folder, state) {
   if (!file) return null;
   return read(`${specsDir(folder)}/${state.id}/rounds/${roundDir(state.phase, state.round - 1)}/${baseName(file)}`);
 }
+
+/** Last round's kept document and comments ({ doc, comments }), or null when there was none. */
+export async function lastRound(folder, state) {
+  const doc = await submittedDoc(folder, state);
+  if (doc == null) return null;
+  let comments = [];
+  try {
+    comments = JSON.parse((await read(`${specsDir(folder)}/${state.id}/rounds/${roundDir(state.phase, state.round - 1)}/review.json`)) ?? "{}").comments ?? [];
+  } catch {
+    // an unreadable review.json: still show the section marks
+  }
+  return { doc, comments };
+}
