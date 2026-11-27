@@ -4,7 +4,7 @@ import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
 import { readTextFile, focused, spaces, props, panes, run, shared, setShared, theme, nextCommand, watchFolder, window, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
-import { placeFor, isTabCopy, commandOf, requestFor, takeRequest, tabHost } from "./core/place.js";
+import { placeFor, isTabCopy, commandOf, requestFor, takeRequest, tabHost, folderFor } from "./core/place.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
@@ -39,8 +39,7 @@ export default class Specd extends View {
   init(_props, cx) {
     // The terminal that was focused when the palette entry ran (or a folder given as a prop).
     // A new tab has no terminal yet, so fall back to the folder of the space it opened in.
-    const f = focused();
-    this.folder = props()?.folder ?? f?.cwd ?? spaces().find((s) => s.id === f?.space)?.folder ?? null;
+    this.folder = folderFor({ prop: props()?.folder, focused: focused(), spaces: spaces() });
     this.specs = [];
     this.errors = [];
     this.found = []; // specs written outside specd (S11)
@@ -72,6 +71,8 @@ export default class Specd extends View {
       return;
     }
     this.lastReq = 0;
+    // The panel copy follows the focused space; a tab copy keeps the folder it opened with.
+    this.follow = place === "panel" && !isTabCopy(props());
     this.diagrams = new Diagrams();
     this.docW = 800;
     this.settingsOpen = false;
@@ -101,28 +102,22 @@ export default class Specd extends View {
     if (place === "panel") {
       // A request written before this copy started (its stack child wasn't running) is taken now,
       // later ones on the poll.
-      const poll = (cx) => cx.spawn(async (cx) => { if (await this.pollRequest(cx)) cx.notify(); });
+      const poll = (cx) => cx.spawn(async (cx) => {
+        const moved = this.syncFolder(cx);
+        if ((await this.pollRequest(cx)) || moved) cx.notify();
+      });
       poll(cx);
       cx.timer.every(POLL_MS, poll);
     }
-    if (!this.folder) return;
+    if (!this.folder && !this.follow) return;
 
     cx.spawn(async (cx) => {
       await this.reload();
       cx.notify();
     });
-    // Folder watch: reload as soon as something under .specd or the shown document's folder changes.
-    cx.spawn(async (cx) => {
-      for (;;) {
-        try {
-          await watchFolder(this.watchDir());
-        } catch {
-          return; // the watch was refused (too many folders): the timer below keeps the view fresh
-        }
-        if (await this.reload()) cx.notify();
-      }
-    });
+    this.startWatch(cx);
     cx.timer.every(POLL_MS, (cx) => {
+      this.syncFolder(cx);
       cx.spawn(async (cx) => {
         if (await this.reload()) cx.notify();
       });
@@ -144,6 +139,41 @@ export default class Specd extends View {
         cx.notify();
       }
     });
+  }
+
+  // Folder watch: reload as soon as something under .specd or the shown document's folder changes.
+  // A new watch (generation) starts when the folder changes; the old one ends when it next fires.
+  startWatch(cx) {
+    const gen = (this.watchGen = (this.watchGen ?? 0) + 1);
+    const dir = this.watchDir();
+    if (!dir) return;
+    cx.spawn(async (cx) => {
+      while (gen === this.watchGen) {
+        try {
+          await watchFolder(this.watchDir());
+        } catch {
+          return; // the watch was refused (too many folders): the timer keeps the view fresh
+        }
+        if (gen !== this.watchGen) return;
+        if (await this.reload()) cx.notify();
+      }
+    });
+  }
+
+  // Panel copy: take the focused space's folder while at the list. With a spec, the New spec form
+  // or the Adopt form open the folder stays until Back or Cancel. True when the folder changed.
+  syncFolder(cx) {
+    if (!this.follow || this.zoom || this.selected != null || this.creating || this.adopting) return false;
+    const next = folderFor({ prop: props()?.folder, focused: focused(), spaces: spaces() });
+    if (next === this.folder || (next == null && this.folder)) return false; // focus on a pane with no folder keeps the last one
+    this.folder = next;
+    this.specs = [];
+    this.errors = [];
+    this.found = [];
+    this.listKey = null;
+    this.startWatch(cx);
+    cx.spawn(async (cx) => { if (await this.reload()) cx.notify(); });
+    return true;
   }
 
   // Tab copy in the `specd` layout: write the request, show and select the panel's specd child,
@@ -203,7 +233,7 @@ export default class Specd extends View {
 
   // Reads the folder again; true when something changed (so the caller notifies).
   async reload() {
-    if (this.busy || this.saving) return false;
+    if (this.busy || this.saving || !this.folder) return false;
     this.busy = true;
     try {
       let changed = false;

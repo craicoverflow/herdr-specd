@@ -1,7 +1,7 @@
 // core/place.js: where specd opens (panel or tab) and the request a tab copy hands to the panel copy.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { placeFor, requestFor, takeRequest, commandOf, isTabCopy, tabHost, REQUEST_TTL_MS } from "../mods/specd/core/place.js";
+import { placeFor, requestFor, takeRequest, commandOf, isTabCopy, tabHost, folderFor, REQUEST_TTL_MS } from "../mods/specd/core/place.js";
 
 test("placeFor: the specd layout is a panel, anything else a tab", () => {
   assert.equal(placeFor("specd"), "panel");
@@ -46,4 +46,14 @@ test("tabHost: the tab this copy is shown in, only when the tab holds a specd pa
   assert.equal(tabHost(panes, "t2"), null, "the panel copy: the focused tab is a task tab");
   assert.equal(tabHost(panes, "t3"), null);
   assert.equal(tabHost(panes, undefined), null);
+});
+
+test("folderFor: the folder prop, else the focused terminal's cwd, else its space's folder, else null", () => {
+  const spaces = [{ id: "s1", folder: "/space1" }, { id: "s2" }];
+  assert.equal(folderFor({ prop: "/p", focused: { cwd: "/c", space: "s1" }, spaces }), "/p");
+  assert.equal(folderFor({ focused: { cwd: "/c", space: "s1" }, spaces }), "/c");
+  assert.equal(folderFor({ focused: { space: "s1" }, spaces }), "/space1");
+  assert.equal(folderFor({ focused: { space: "s2" }, spaces }), null);
+  assert.equal(folderFor({ focused: null, spaces }), null);
+  assert.equal(folderFor({}), null);
 });
