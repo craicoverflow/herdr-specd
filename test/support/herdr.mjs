@@ -34,22 +34,35 @@ export async function exec(cmd, args = [], opts = {}) {
 }
 
 let n = 0;
-const state = { tabs: [], panes: [] };
+const state = { tabs: [], panes: [], focused: null, shared: {} };
 export function run(command, args = {}) {
   journal.push({ type: "run", command, args });
   if (command === "tab.new") {
     n += 1;
     state.tabs.push({ id: `tab-${n}`, name: args.name });
-    state.panes.push({ terminal: `term-${n}`, tab: `tab-${n}` });
+    state.panes.push({ terminal: `term-${n}`, tab: `tab-${n}`, pane: `pane-${n}`, mod: args.mod });
+    if (args.focus) state.focused = { tab: `tab-${n}`, space: "space-1" };
+  }
+  if (command === "tab.close") {
+    state.tabs = state.tabs.filter((t) => t.id !== args.id);
+    state.panes = state.panes.filter((p) => p.tab !== args.id);
+    if (state.focused?.tab === args.id) state.focused = null;
   }
 }
+// Test seams: the shared store (`shared`/`setShared`, set to {} to reset) and the layout's name.
+export const shared = (k) => (k === "layout" ? state.layout ?? null : state.shared[k] ?? null);
+export function setShared(k, v) { journal.push({ type: "setShared", key: k, value: v }); state.shared[k] = v; }
+export const setLayoutName = (name) => { state.layout = name; };
+export const resetShared = () => { state.shared = {}; };
 export const spaces = () => [{ id: "space-1", tabs: state.tabs }];
 export const panes = () => state.panes;
 export async function hc(args) { journal.push({ type: "hc", args }); return { code: 0, stdout: "", stderr: "" }; }
 export const settings = () => ({});
 export const theme = () => ({});
-export const props = () => ({});
-export const focused = () => null;
+let currentProps = {};
+export const props = () => currentProps;
+export const setProps = (p) => { currentProps = p ?? {}; };
+export const focused = () => state.focused;
 export const window = () => ({ visible: true });
 export const notify = (...a) => journal.push({ type: "notify", args: a });
 export const nextCommand = () => null;

@@ -6,7 +6,7 @@
     {
       "title": "specd: Open",
       "command": "tab.new",
-      "args": { "mod": "specd", "name": "specd", "focus": true },
+      "args": { "mod": "specd", "name": "specd", "focus": true, "props": { "tab": true } },
       "words": "spec review plan tasks"
     }
     ,
