@@ -5,8 +5,8 @@ run headlessly against 9 visible fake specs, then blind against 5 held-out specs
 saw. Dispatch was a dry run throughout: only a fake `herdr-task` ran, and the real Shepherdr has
 no tasks from any of it.
 
-The harness, corpora, results and per-design reports are on branch `uat/base` (under `uat/`) and on
-the `uat/<design>` branches; paths below starting with `uat/` are on those branches, not on `main`.
+The prototypes, test harness and fake specs were thrown away once the decision was made; this
+document keeps the results. Design C, with the pieces below, is what specd now does.
 
 ## Recommendation
 
@@ -87,7 +87,7 @@ verdict differs from the automatic scorer, the cell is marked †.
 
 - `mods/specd/core/adopt.js` / `mods/specd/core/state.js`: adopting a lone spec stores only `{spec}`, and `planApproval`
   then prompts with `undefined` paths. With just this fixed, today's design ran v1, v4 and v5 end to
-  end (`uat/results-coordinator/baseline-pathfix/` on `uat/base`).
+  end.
 - `mods/specd/core/state.js` `ID_RE` rejects digit-first IDs. spec-kit folders are `003-name`, and Found
   pre-fills them, then Adopt refuses them.
 - A spec plus a plan with no tasks file passes Approve, then crashes with the raw
@@ -127,21 +127,9 @@ returns one JSON object per call and uses no LLM.
   used sonnet rather than opus, and their v1, v4 and v5 lists are coarser than the native-opus
   reference. Those cells measure plan quality, not dispatch. D's v4 and v11 were never run.
 - **The scorer matches titles loosely.** Every held-out list was checked by hand (the † cells). B
-  also caught a scorer bug (a shared seen-set in `closure()`). It was fixed in 4614a79 on `uat/base`, and
-  every result was re-scored with `uat/rescore.mjs`.
+  also caught a scorer bug (a shared seen-set in `closure()`). It was fixed, and every result was
+  re-scored.
 - **I wrote both corpora.** Two cases are real (both native plans and the v4 refusal are unedited
   `claude -p "/agent-skills:plan"` output), but the rest is less varied than real life.
-- **No design is wired into the UI.** Every flow ran through `core/` and `io/` as the handlers
-  would call them.
-
-## Where everything is
-
-- **Branches and worktrees** (in `../herdr-specd-uat/<name>`): `uat/base` (harness, corpora, and
-  this evaluation as `uat/EVALUATION.md`), `uat/baseline`, `uat/a-patch`, `uat/b-derived`, `uat/c-llm`, `uat/d-shepherdr`. Each
-  design has `uat/results/<design>/REPORT.md`. Nothing is pushed, and `main` is untouched.
-- **Blind runs** (on `uat/base`): `uat/heldout/` (the 5 specs) and `uat/results-heldout/run{1,2}/<design>/`.
-- **Rerun:**
-  `node --import ./uat/register.mjs uat/run.mjs --driver uat/drivers/<d>.mjs --all uat/corpus`
-  inside a design's worktree.
-- **Clean up:**
-  `git worktree remove ../herdr-specd-uat/<name>` for each, then `git branch -D uat/<name>`.
+- **No design was wired into the UI during the UAT.** Every flow ran through `core/` and `io/` as
+  the handlers would call them. Design C has been wired in since.
