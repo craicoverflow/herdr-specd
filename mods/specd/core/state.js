@@ -5,7 +5,6 @@ export const STATE_VERSION = 1;
 export const PHASES = ["spec", "plan", "build", "done"];
 const STATUSES = ["drafting", "review", "approved"];
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
-const DEFAULT_MODELS = { spec: "opus", plan: "opus", build: "sonnet" };
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
@@ -21,7 +20,7 @@ function fresh(fields) {
     state: STATE_VERSION,
     adapter: "agent-skills",
     brief: "",
-    models: { ...DEFAULT_MODELS },
+    models: {},
     round: 1,
     owners: {},
     pending: [],
@@ -39,7 +38,7 @@ export function createSpec({ id, brief, adapter, paths, models, existingIds }) {
     adapter: adapter ?? "agent-skills",
     brief,
     paths: { ...paths },
-    models: { ...DEFAULT_MODELS, ...models },
+    models: { ...models }, // only what the person chose: folder config and the adapter fill the rest
     phase: "spec",
     status: "drafting",
   });
@@ -55,7 +54,7 @@ export function adoptSpec({ id, paths, adapter, brief, models, existingIds }) {
     adapter: adapter ?? "agent-skills",
     brief: brief ?? "",
     paths: { ...paths },
-    models: { ...DEFAULT_MODELS, ...models },
+    models: { ...models }, // only what the person chose: folder config and the adapter fill the rest
     phase: paths.plan ? "plan" : "spec",
     status: "review",
   });

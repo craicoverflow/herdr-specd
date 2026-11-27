@@ -61,6 +61,20 @@ function skipButtons({ t, approveBlock, approving, onSkip }) {
     .child(b("skip-single", "Dispatch as one task", "single"))];
 }
 
+// Who owns this phase, and the pick list when Submit (or the Owner link) asks.
+export function ownerBlock({ t, owner }) {
+  const row = (id, text, onClick) => div().id(id).w_full().py(4).px(8).rounded(6).border_1().border_color(t.border).text_size(12)
+    .cursor_pointer().hover((e) => e.bg(t.background)).on_click((_e, cx) => onClick(cx)).child(text);
+  if (!owner.pick) {
+    return h_flex().gap(8).child(div().text_size(12).text_color(t.muted).child(`Owner: ${owner.label}`)).child(link(t, "owner-set", "set", owner.onOpen));
+  }
+  return v_flex().gap(4)
+    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(owner.pick.title ?? (owner.pick.resume ? "Send this review to which agent?" : "Which agent owns this document?")))
+    .children(owner.pick.choices.map((c, i) => row(`owner-${i}`, c.label, (cx) => owner.onPick(c, cx))))
+    .children(owner.pick.resume ? [row("owner-new", "Start a new agent", owner.onNew)] : [])
+    .child(link(t, "owner-cancel", "cancel", owner.onCancel));
+}
+
 const STATUS = { anchored: "anchored", moved: "moved?", outdated: "outdated" };
 
 // Last round's comments, read-only, each with where it landed in the current file.
@@ -84,6 +98,7 @@ export function sidePanel(p) {
     .children(pending.length ? pending.map((c, i) => card({ ...p, c, i })) : [div().text_size(13).text_color(t.muted).child("None yet.")])
     .children(p.changes?.comments.length ? [label(`Last round · ${p.changes.comments.length}`)] : [])
     .children((p.changes?.comments ?? []).map((c, i) => lastRoundCard({ t, c, i })))
+    .children(p.owner ? [ownerBlock(p)] : [])
     .children(pending.length || p.submitting ? [submitButton(p)] : [])
     .children(p.onApprove ? [approveButton(p)] : [])
     .children(skipButtons(p))

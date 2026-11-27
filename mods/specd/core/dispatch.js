@@ -2,6 +2,7 @@
 // (running herdr-task, writing prompt files, saving state) are passed in by io/herdr-task.js.
 import { orderItems, buildPrompt, addArgv, startArgv, planRetry } from "./tasks.js";
 import { resolveModels } from "./adapters.js";
+import { modelDefaults } from "./worker.js";
 import { validateTasks } from "./tasks.js";
 
 /** `repo` (relative to the spec folder, "." for the folder itself) as a normalised absolute path. */
@@ -21,9 +22,9 @@ const absolute = (folder, path) => (path.startsWith("/") ? path : resolveRepo(fo
  * One row per item in dependency order: what to create and the prompt it gets.
  * `folder` is the spec folder (the one holding .specd).
  */
-export function dispatchRows({ tasks, state, adapter, config, folder, planText, docs }) {
+export function dispatchRows({ tasks, state, adapter, config, folder, planText, docs, workerModel }) {
   const build = adapter.phases.build;
-  const { model, effort } = resolveModels(adapter, config, state).build;
+  const { model, effort } = resolveModels(adapter, config, state, modelDefaults(workerModel)).build;
   const specPath = absolute(folder, state.paths.spec);
   const planPath = state.paths.plan ? absolute(folder, state.paths.plan) : null;
   return orderItems(tasks.items).map((item) => ({

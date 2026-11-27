@@ -19,7 +19,7 @@ test("S1 createSpec: spec phase, drafting, round 1, defaults", () => {
   assert.deepEqual(s.pending, []);
   assert.deepEqual(s.owners, {});
   assert.deepEqual(s.dispatch, { review: false, created: {} });
-  assert.deepEqual(s.models, { spec: "opus", plan: "opus", build: "sonnet" });
+  assert.deepEqual(s.models, {}); // folder config and the adapter supply defaults
 });
 
 test("S1 createSpec: ID must match [A-Za-z0-9][A-Za-z0-9-]*, brief required", () => {
@@ -32,7 +32,7 @@ test("S1 createSpec: ID must match [A-Za-z0-9][A-Za-z0-9-]*, brief required", ()
 
 test("S1 createSpec: models can be overridden", () => {
   const s = createSpec({ ...base, paths, models: { build: "haiku" } });
-  assert.deepEqual(s.models, { spec: "opus", plan: "opus", build: "haiku" });
+  assert.deepEqual(s.models, { build: "haiku" });
 });
 
 test("S1 createSpec refuses an ID that already exists in the folder", () => {
