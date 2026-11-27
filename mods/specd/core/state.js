@@ -55,7 +55,7 @@ export function adoptSpec({ id, paths, adapter, brief, models, existingIds }) {
     adapter: adapter ?? "agent-skills",
     brief: brief ?? "",
     paths: { ...paths },
-    models: { ...DEFAULT_MODELS, ...models },
+    models: { ...models }, // only what the person chose: folder config and the adapter fill the rest
     phase: paths.plan ? "plan" : "spec",
     status: "review",
   });
