@@ -87,6 +87,18 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
   status, round, owners, pending, dispatch) and `.specd/specs/<ID>/rounds/<n>/`.
 - No images or art.
 
+## Install and switch the layout
+
+The repo ships a `specd` layout (Shepherdr with specd in the right panel instead of Artifacts) and
+the `specd` mod. `npm run link` copies every `layouts/*` into `$HERDR_APP_HOME/layouts` and every
+`mods/*` into `…/mods` (default home `~/.config/herdr-app`); re-run it after edits.
+
+- Show it: `herdr-app do layout.switch '{"name":"specd"}'`. The panel opens on Tasks; pick specd
+  with the panel's stack (`layout.select {"stack":"panel-body","child":"specd"}`).
+- Switch back: `herdr-app do layout.switch '{"name":"shepherdr"}'`.
+- Uninstall: `bash scripts/link.sh --remove` deletes only `layouts/specd.json`, `layouts/specd.svg`,
+  `mods/specd` and `mods/pane-specd`; nothing else in the home is touched.
+
 ## Watch out
 
 - Never start async work from `render()`: `cx.notify()` during render throws and the task dies
