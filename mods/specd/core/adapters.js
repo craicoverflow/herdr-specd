@@ -66,14 +66,14 @@ export function resolvePaths(adapter, id, folder) {
   return out;
 }
 
-// Precedence: spec state > folder config > adapter. `models` entries are a model name
-// or { model, effort }.
-export function resolveModels(adapter, folder, spec) {
+// Precedence: spec state > folder config > `defaults` (e.g. Shepherdr's worker model, { build: "x" })
+// > adapter. `models` entries are a model name or { model, effort }.
+export function resolveModels(adapter, folder, spec, defaults) {
   const out = {};
   for (const p of PHASES) {
     const base = adapter.phases[p];
     let model = base.model, effort = base.effort;
-    for (const layer of [folder?.models?.[p], spec?.models?.[p]]) {
+    for (const layer of [defaults?.[p], folder?.models?.[p], spec?.models?.[p]]) {
       if (layer === undefined) continue;
       if (typeof layer === "string") model = layer;
       else { if (layer.model) model = layer.model; if (layer.effort) effort = layer.effort; }

@@ -62,14 +62,14 @@ function skipButtons({ t, approveBlock, approving, onSkip }) {
 }
 
 // Who owns this phase, and the pick list when Submit (or the Owner link) asks.
-function ownerBlock({ t, owner }) {
+export function ownerBlock({ t, owner }) {
   const row = (id, text, onClick) => div().id(id).w_full().py(4).px(8).rounded(6).border_1().border_color(t.border).text_size(12)
     .cursor_pointer().hover((e) => e.bg(t.background)).on_click((_e, cx) => onClick(cx)).child(text);
   if (!owner.pick) {
     return h_flex().gap(8).child(div().text_size(12).text_color(t.muted).child(`Owner: ${owner.label}`)).child(link(t, "owner-set", "set", owner.onOpen));
   }
   return v_flex().gap(4)
-    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(owner.pick.resume ? "Send this review to which agent?" : "Which agent owns this document?"))
+    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(owner.pick.title ?? (owner.pick.resume ? "Send this review to which agent?" : "Which agent owns this document?")))
     .children(owner.pick.choices.map((c, i) => row(`owner-${i}`, c.label, (cx) => owner.onPick(c, cx))))
     .children(owner.pick.resume ? [row("owner-new", "Start a new agent", owner.onNew)] : [])
     .child(link(t, "owner-cancel", "cancel", owner.onCancel));

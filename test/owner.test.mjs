@@ -49,3 +49,10 @@ test("an existing state.json with models still outranks folder config", () => {
   const old = { models: { spec: "opus", plan: "opus", build: "sonnet" } };
   assert.equal(resolveModels(adapter(), { models: { plan: "haiku" } }, old).plan.model, "opus");
 });
+
+test("createSpec writes no default models, so folder config and the adapter take effect", async () => {
+  const { createSpec } = await import("../mods/specd/core/state.js");
+  const s = createSpec({ id: "N-1", brief: "b", paths: { spec: "s.md" } });
+  assert.deepEqual(s.models, {});
+  assert.equal(resolveModels(adapter(), { models: { spec: "haiku" } }, s).spec.model, "haiku");
+});

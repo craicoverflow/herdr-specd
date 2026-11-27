@@ -27,7 +27,7 @@ import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { dispatchView } from "./ui/dispatch.js";
 import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
-import { addTask, startTask, writePromptFile, parentMode, listTasks } from "./io/herdr-task.js";
+import { addTask, startTask, writePromptFile, parentMode, listTasks, workerModel } from "./io/herdr-task.js";
 import { buildView } from "./ui/build.js";
 import { buildGroups, repoFolders, shouldPoll, POLL_MS as BUILD_POLL_MS } from "./core/build.js";
 
@@ -55,6 +55,7 @@ export default class Specd extends View {
     this.sel = null; // the last settled selection as an anchor (ok) or { ok: false, reason }
     this.editing = null; // index of the pending comment being edited
     this.noteError = null;
+    this.ownerPick = null; // the open owner picker: { choices, resume, phase, title }
     this.dispatching = null; // S7: the dispatch view's data
     this.llm = claudeLlm; // the model call that makes a dispatch list (a seam for headless tests)
     this.noteInput = InputState.new({ placeholder: "e.g. one task per phase; keep the migration on its own" });
@@ -344,9 +345,8 @@ export default class Specd extends View {
 
   // ---- submit (S4): a handler; nothing is sent anywhere until the person presses Submit ----------
 
-  ownerProps() {
-    const { state } = this.spec;
-    const o = state.owners?.[state.phase];
+  ownerProps(phase = this.spec.state.phase) {
+    const o = this.spec.state.owners?.[phase];
     const label = ownerAlive(o) ? `terminal ${o.terminal}` : "none";
     return { label, pick: this.ownerPick, onOpen: (cx) => this.openOwnerPick(cx), onPick: (c, cx) => this.pickOwner(c, cx),
       onNew: (cx) => this.startNewOwner(cx), onCancel: (cx) => { this.ownerPick = null; cx.notify(); } };
@@ -354,12 +354,31 @@ export default class Specd extends View {
 
   // ---- owner: claim a live agent terminal as the phase's owner ------------------------------------
 
-  openOwnerPick(cx, resume = false) {
+  // The picker, when `phase` has no live owner and live agent terminals exist. `resume` is what to
+  // run once one is picked ("submit" | "approve" | "errors"); `title` words the question.
+  // True when the picker was opened (the caller stops and waits).
+  askOwner(cx, phase, resume, title) {
+    const owner = this.spec.state.owners?.[phase];
+    const choices = ownerAlive(owner) ? [] : liveAgents(owner?.terminal);
+    if (!needsOwnerPick({ alive: false, choices })) return false;
+    this.ownerPick = { choices, resume, phase, title };
+    this.noteError = null;
+    cx.notify();
+    return true;
+  }
+
+  openOwnerPick(cx) {
     if (this.saving || this.submitting) return;
     const { state } = this.spec;
     const owner = state.owners?.[state.phase];
-    this.ownerPick = { choices: liveAgents(ownerAlive(owner) ? null : owner?.terminal), resume };
+    this.ownerPick = { choices: liveAgents(ownerAlive(owner) ? null : owner?.terminal), resume: null, phase: state.phase };
     cx.notify();
+  }
+
+  resumeAfterOwner(cx, resume, fresh) {
+    if (resume === "submit") this.submit(cx, fresh);
+    else if (resume === "approve") this.approve(cx, fresh);
+    else if (resume === "errors") this.sendErrorsToPlan(cx, fresh);
   }
 
   pickOwner(choice, cx) {
@@ -368,26 +387,30 @@ export default class Specd extends View {
     const { state } = this.spec;
     this.saving = true;
     cx.spawn(async (cx) => {
+      let failed = null;
       try {
-        const next = claimOwner(state, state.phase, choice);
+        const next = claimOwner(state, pick.phase ?? state.phase, choice);
         await saveState(this.folder, next);
         this.spec = { ...this.spec, state: next };
         this.ownerPick = null;
         this.noteError = null;
       } catch (e) {
-        this.noteError = `Couldn't set the owner: ${e.message ?? e}`;
+        failed = `Couldn't set the owner: ${e.message ?? e}`;
+        this.noteError = failed;
+        if (this.dispatching) this.dispatching.error = failed;
       } finally {
         this.saving = false;
       }
       cx.notify();
-      if (pick.resume && !this.noteError) this.submit(cx);
+      if (pick.resume && !failed) this.resumeAfterOwner(cx, pick.resume, false);
     });
   }
 
-  // "Start a new agent": Submit goes ahead and opens a tab as before.
+  // "Start a new agent": the action goes ahead and opens a tab as before.
   startNewOwner(cx) {
+    const resume = this.ownerPick?.resume;
     this.ownerPick = null;
-    this.submit(cx, true);
+    this.resumeAfterOwner(cx, resume, true);
   }
 
   submit(cx, fresh = false) {
@@ -402,16 +425,7 @@ export default class Specd extends View {
       cx.notify();
       return;
     }
-    if (!fresh) {
-      const owner = state.owners?.[state.phase];
-      const choices = ownerAlive(owner) ? [] : liveAgents(owner?.terminal);
-      if (needsOwnerPick({ alive: false, choices })) {
-        this.ownerPick = { choices, resume: true };
-        this.noteError = null;
-        cx.notify();
-        return;
-      }
-    }
+    if (!fresh && this.askOwner(cx, state.phase, "submit", "Send this review to which agent?")) return;
     this.submitting = true;
     this.saving = true; // the poll must not reload state.json under a half-finished Submit
     this.noteError = null;
@@ -449,7 +463,7 @@ export default class Specd extends View {
 
   // ---- approve (S6): a handler; the plan agent starts only when the person presses Approve -------
 
-  approve(cx) {
+  approve(cx, fresh = false) {
     if (this.approving || this.saving) return;
     const { state } = this.spec;
     const block = approveBlock(state);
@@ -459,6 +473,7 @@ export default class Specd extends View {
       return;
     }
     if (state.phase === "plan") return this.openDispatch(cx, { mode: "plan" });
+    if (!fresh && this.askOwner(cx, "plan", "approve", "Send the plan request to which agent?")) return;
     this.approving = true;
     this.saving = true; // the poll must not reload state.json under a half-finished approval
     this.noteError = null;
@@ -469,8 +484,11 @@ export default class Specd extends View {
         const config = await folderConfig(this.folder);
         const plan = planApproval({ adapter, state, config });
         const planSeen = await plansNaming(this.folder, state.paths.spec); // older plans for this spec, so they're not taken for the new one
-        const started = await startAgent(cx, { folder: this.folder, adapter, model: plan.model, name: `${state.id} plan`, message: plan.message });
-        const next = setOwner({ ...plan.state, planSeen }, "plan", started);
+        const owner = state.owners?.plan;
+        let started = null;
+        if (ownerAlive(owner)) await sendMessage(owner.terminal, plan.message);
+        else started = await startAgent(cx, { folder: this.folder, adapter, model: plan.model, name: `${state.id} plan`, message: plan.message });
+        const next = started ? setOwner({ ...plan.state, planSeen }, "plan", started) : { ...plan.state, planSeen };
         await saveState(this.folder, next);
         this.spec = { ...this.spec, state: next, path: shownDocPath(this.folder, next), doc: null }; // the plan's path, not the spec's
         this.pieces = [];
@@ -540,7 +558,7 @@ export default class Specd extends View {
   async listRows(target, r) {
     const { adapter } = await adapterFor(this.folder, target);
     const config = await folderConfig(this.folder);
-    return { adapter, rows: dispatchRows({ tasks: { items: r.items }, state: target, adapter, config, folder: this.folder, planText: r.planText ?? "", docs: r.docs }) };
+    return { adapter, rows: dispatchRows({ tasks: { items: r.items }, state: target, adapter, config, folder: this.folder, planText: r.planText ?? "", docs: r.docs, workerModel: await workerModel() }) };
   }
 
   // Preview: the list from manifest.json, worked out again (one model call) when there is none yet,
@@ -657,9 +675,10 @@ export default class Specd extends View {
     cx.notify();
   }
 
-  sendErrorsToPlan(cx) {
+  sendErrorsToPlan(cx, fresh = false) {
     const d = this.dispatching;
     if (!d?.errors?.length || d.sending) return;
+    if (!fresh && this.askOwner(cx, "plan", "errors", "Send these errors to which agent?")) return;
     d.sending = true;
     d.error = null;
     cx.notify();
@@ -817,6 +836,7 @@ export default class Specd extends View {
     this.sel = null;
     this.editing = null;
     this.noteError = null;
+    this.ownerPick = null;
     this.dispatching = null;
     await this.reload();
   }
@@ -874,7 +894,7 @@ export default class Specd extends View {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         dispatchView({ t, d: this.dispatching, created: this.spec.state.dispatch?.created, noteInput: this.noteInput,
           onConfirm: (cx) => this.confirmDispatch(cx), onToggle: (cx) => this.toggleDispatchReview(cx),
-          onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onRetry: (cx) => this.openDispatch(cx, { force: true }),
+          owner: this.ownerPick ? this.ownerProps("plan") : null, onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onRetry: (cx) => this.openDispatch(cx, { force: true }),
           onAskAgain: (cx) => this.askAgain(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); } }));
     }
     if (!this.spec) {

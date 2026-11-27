@@ -3,6 +3,7 @@
 import * as fs from "fs/promises";
 import { exec, home, readTextFile, writeTextFile } from "herdr";
 import { readPermissionModeFile } from "../core/tasks.js";
+import { parseWorkerModel } from "../core/worker.js";
 import { claudeSessionFile, checkTasksText, parseAddResult, resolveRepo } from "../core/dispatch.js";
 
 const TIMEOUT = 60000;
@@ -24,6 +25,11 @@ export async function runTask(argv) {
   const r = await exec(await taskBin(), argv.slice(1), { timeout: TIMEOUT });
   if (r.code !== 0) throw new Error(`${argv.slice(0, 3).join(" ")} failed: ${(r.stderr || r.stdout).trim() || `exit ${r.code}`}`);
   return r.stdout;
+}
+
+/** Shepherdr's worker model, or null when herdr-task is missing, fails or prints something else. */
+export async function workerModel() {
+  try { return parseWorkerModel(await runTask(["herdr-task", "config", "--json"])); } catch { return null; }
 }
 
 export const addTask = async (argv) => parseAddResult(await runTask(argv));

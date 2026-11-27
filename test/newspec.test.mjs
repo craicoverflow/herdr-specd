@@ -11,7 +11,7 @@ test("a new spec records the adapter's paths, drafting, and the models chosen", 
   assert.equal(state.paths.spec, "specs/DEMO-1/spec.md");
   assert.equal(state.phase, "spec");
   assert.equal(state.status, "drafting");
-  assert.deepEqual(state.models.spec, "opus");
+  assert.deepEqual(state.models, {}); // nothing chosen: the adapter and .specd/config.json apply
 });
 
 test("the first message names the exact path and not SPEC.md as the target", () => {
