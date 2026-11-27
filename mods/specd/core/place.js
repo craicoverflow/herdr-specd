@@ -28,3 +28,7 @@ export function takeRequest(shared, lastAt, now) {
 export function tabHost(panes, tab, mod = "specd") {
   return tab && panes.some((p) => p.tab === tab && p.mod === mod) ? tab : null;
 }
+
+/** The folder the panel shows: the `folder` prop, else the focused terminal's cwd, else its space's folder, else null. */
+export const folderFor = ({ prop, focused, spaces } = {}) =>
+  prop ?? focused?.cwd ?? (spaces ?? []).find((s) => s.id === focused?.space)?.folder ?? null;

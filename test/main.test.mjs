@@ -14,7 +14,7 @@ const F = await import("../mods/specd/io/files.js");
 const { journal } = await import("./support/herdr.mjs");
 
 let pending = [];
-const cx = { notify() {}, spawn(fn) { pending.push(fn(cx)); }, timer: { every() {} }, sleep: () => Promise.resolve(), write_to_clipboard() {} };
+const cx = { notify() {}, spawn(fn) { if (!/nextCommand/.test(fn)) pending.push(fn(cx)); } /* the dev command loop parks for good */, timer: { every() {} }, sleep: () => Promise.resolve(), write_to_clipboard() {} };
 const settle = async () => { while (pending.length) { const p = pending; pending = []; await Promise.all(p); } };
 
 async function open(dir, id, llm) {
@@ -159,8 +159,10 @@ function reset(layoutName) {
   H.setLayoutName(layoutName);
   H.resetShared();
   H.setProps({});
+  H.setFocused(null);
+  H.setSpaces(null);
 }
-after(() => { H.setLayoutName(null); H.setProps({}); H.resetShared(); });
+after(() => { H.setLayoutName(null); H.setProps({}); H.resetShared(); H.setFocused(null); });
 
 for (const [title, cmd] of [["specd: Open", "open"], ["specd: New spec", "new"], ["specd: Adopt spec", "adopt"]]) {
   test(`${title} in the specd layout: hands the request to the panel, selects it, closes its own tab`, async () => {
@@ -200,6 +202,7 @@ test("a request written while the panel copy runs is taken on its poll, once", a
   const pcx = { ...cx, timer: { every: (_ms, fn) => timers.push(fn) } };
   panel.init({}, pcx);
   panel.folder = folder("place-poll", { files: TICKET });
+  H.setFocused({ tab: "t", space: "s1", cwd: panel.folder });
   assert.equal(panel.creating, null);
   await paletteTab("specd: New spec");
   for (const t of timers) t(pcx);
@@ -248,4 +251,93 @@ test("the diagram zoom window is never redirected", () => {
   v.init({}, cx);
   assert.deepEqual([sharedWrites().length, runs("tab.close").length], [0, 0]);
   assert.ok(v.zoom);
+});
+
+// ---- the panel follows the focused space -----------------------------------------------------------
+
+async function panelAt(dirA) {
+  reset("specd");
+  H.setFocused({ tab: "t", space: "s1", cwd: dirA });
+  const v = new Specd();
+  const timers = [];
+  const pcx = { ...cx, timer: { every: (_ms, fn) => timers.push(fn) } };
+  v.init({}, pcx);
+  await settle();
+  const tick = async () => { for (const t of timers) t(pcx); await settle(); };
+  return { v, tick };
+}
+const titles = (v) => v.specs.map((s) => s.id);
+
+test("at the list, focusing a terminal in another folder shows that folder's specs", async () => {
+  const a = folder("follow-a", { files: TICKET });
+  await F.adoptFiles(a, { id: "AAA-1", spec: `${a}/PROJ-123.md` });
+  const b = folder("follow-b", { files: TICKET });
+  await F.adoptFiles(b, { id: "BBB-1", spec: `${b}/PROJ-123.md` });
+  const { v, tick } = await panelAt(a);
+  assert.deepEqual([v.folder, titles(v)], [a, ["AAA-1"]]);
+  H.setFocused({ tab: "t2", space: "s2", cwd: b });
+  await tick();
+  assert.deepEqual([v.folder, titles(v)], [b, ["BBB-1"]]);
+  assert.deepEqual(journal.filter((e) => e.type === "watch").map((e) => e.dir).slice(-2), [a, b], "the watcher follows");
+});
+
+test("with a spec, the New spec form or the Adopt form open, the folder stays until Back or Cancel", async () => {
+  const a = folder("pin-a", { files: TICKET });
+  await F.adoptFiles(a, { id: "AAA-1", spec: `${a}/PROJ-123.md` });
+  const b = folder("pin-b", { files: TICKET });
+  const { v, tick } = await panelAt(a);
+  await v.open("AAA-1");
+  H.setFocused({ tab: "t2", space: "s2", cwd: b });
+  await tick();
+  assert.deepEqual([v.folder, v.selected], [a, "AAA-1"]);
+  await v.back();
+  await tick();
+  assert.equal(v.folder, b);
+  H.setFocused({ tab: "t", space: "s1", cwd: a });
+  v.creating = { adapter: "agent-skills", folder: b };
+  await tick();
+  assert.equal(v.folder, b, "New spec form open");
+  v.creating = null;
+  v.adopting = { spec: null, plan: null, tasks: null };
+  await tick();
+  assert.equal(v.folder, b, "Adopt form open");
+  v.adopting = null;
+  await tick();
+  assert.equal(v.folder, a, "after Cancel");
+});
+
+test("no folder shows the message and recovers when a terminal is focused", async () => {
+  const a = folder("rec-a", { files: TICKET });
+  await F.adoptFiles(a, { id: "AAA-1", spec: `${a}/PROJ-123.md` });
+  const { v, tick } = await panelAt(null);
+  H.setFocused(null);
+  await tick();
+  assert.equal(v.folder, null);
+  H.setFocused({ tab: "t", space: "s1", cwd: a });
+  await tick();
+  H.setFocused({ tab: "p", space: "s9" }); // focus on the panel itself: no cwd, no space folder
+  await tick();
+  assert.equal(v.folder, a, "keeps the last folder");
+  v.folder = null;
+  v.render(cx);
+  H.setFocused({ tab: "t", space: "s1", cwd: a });
+  await tick();
+  assert.deepEqual([v.folder, titles(v)], [a, ["AAA-1"]]);
+});
+
+test("a tab copy never follows the focus", async () => {
+  const a = folder("tab-a", { files: TICKET });
+  const b = folder("tab-b", { files: TICKET });
+  reset(null);
+  H.setFocused({ tab: "t", space: "s1", cwd: a });
+  H.setProps({ tab: true });
+  const v = new Specd();
+  const timers = [];
+  const tcx = { ...cx, timer: { every: (_ms, fn) => timers.push(fn) } };
+  v.init({}, tcx);
+  await settle();
+  H.setFocused({ tab: "t2", space: "s2", cwd: b });
+  for (const t of timers) t(tcx);
+  await settle();
+  assert.equal(v.folder, a);
 });

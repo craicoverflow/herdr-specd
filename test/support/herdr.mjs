@@ -54,7 +54,9 @@ export const shared = (k) => (k === "layout" ? state.layout ?? null : state.shar
 export function setShared(k, v) { journal.push({ type: "setShared", key: k, value: v }); state.shared[k] = v; }
 export const setLayoutName = (name) => { state.layout = name; };
 export const resetShared = () => { state.shared = {}; };
-export const spaces = () => [{ id: "space-1", tabs: state.tabs }];
+export const spaces = () => state.spaces ?? [{ id: "space-1", tabs: state.tabs }];
+export const setSpaces = (v) => { state.spaces = v; };
+export const setFocused = (v) => { state.focused = v; };
 export const panes = () => state.panes;
 export async function hc(args) { journal.push({ type: "hc", args }); return { code: 0, stdout: "", stderr: "" }; }
 export const settings = () => ({});
@@ -65,8 +67,9 @@ export const setProps = (p) => { currentProps = p ?? {}; };
 export const focused = () => state.focused;
 export const window = () => ({ visible: true });
 export const notify = (...a) => journal.push({ type: "notify", args: a });
-export const nextCommand = () => null;
-export const watchFolder = () => () => {};
+export const nextCommand = () => new Promise(() => {}); // no dev commands: the loop parks here
+// Refused like a watch over the limit, so a watch loop ends at once; the call is recorded.
+export async function watchFolder(dir) { journal.push({ type: "watch", dir }); throw new Error("test/support/herdr.mjs: no folder watching"); }
 export const openOverlay = () => {};
 export const closeOverlay = () => {};
 export const checking = () => false;
