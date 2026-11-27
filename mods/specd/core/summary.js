@@ -18,11 +18,12 @@ export function docTitle(text) {
   return null;
 }
 
+/** Items to dispatch in a manifest.json or tasks.json text: done ones don't count. */
 function taskCount(text) {
   if (typeof text !== "string") return null;
   try {
     const items = JSON.parse(text)?.items;
-    return Array.isArray(items) ? items.length : null;
+    return Array.isArray(items) ? items.filter((i) => !i?.done).length : null;
   } catch {
     return null;
   }

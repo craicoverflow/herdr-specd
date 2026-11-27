@@ -19,10 +19,10 @@ function fileRow({ t, key, label, path, onPick, onClear }) {
 export function adoptView({ t, form, input, error, onPick, onClear, onSubmit, onCancel }) {
   return v_flex().size_full().p(16).gap(10)
     .child(div().text_lg().pb(4).child("Adopt a spec"))
-    .child(div().text_size(12).text_color(t.dim).child("The files stay where they are; specd only records their paths."))
+    .child(div().text_size(12).text_color(t.dim).whitespace_normal().child("The files stay where they are, in any format; specd only records their paths. Only the spec is needed."))
     .child(fileRow({ t, key: "spec", label: "Spec (required)", path: form.spec, onPick, onClear }))
     .child(fileRow({ t, key: "plan", label: "Plan", path: form.plan, onPick, onClear }))
-    .child(fileRow({ t, key: "tasks", label: "tasks.json", path: form.tasks, onPick, onClear }))
+    .child(fileRow({ t, key: "tasks", label: "Task list", path: form.tasks, onPick, onClear }))
     .child(h_flex().gap(8).items_center()
       .child(div().w(110).flex_none().text_size(13).text_color(t.muted).child("ID"))
       .child(div().w(240).rounded(6).border_1().border_color(t.input).bg(t.background).child(Input.new(input))))

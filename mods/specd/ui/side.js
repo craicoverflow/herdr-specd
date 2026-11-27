@@ -50,6 +50,17 @@ function approveButton({ t, approveBlock, approving, onApprove, approveLabel }) 
     .children(approveBlock ? [div().text_size(11).text_color(t.muted).whitespace_normal().child(approveBlock)] : []);
 }
 
+// A spec in review can skip the plan phase: its own text is the plan, or the whole spec is one task.
+function skipButtons({ t, approveBlock, approving, onSkip }) {
+  if (!onSkip || approveBlock) return [];
+  const b = (id, label, mode) => div().id(id).w_full().py(5).rounded(6).text_size(12).text_center().border_1().border_color(t.input)
+    .when(!approving, (e) => e.cursor_pointer().hover((x) => x.bg(t.background)).on_click((_e, cx) => onSkip(mode, cx))).child(label);
+  return [v_flex().gap(4)
+    .child(div().text_size(11).text_color(t.muted).whitespace_normal().child("Or skip planning:"))
+    .child(b("skip-as-plan", "Use the spec as the plan", "spec"))
+    .child(b("skip-single", "Dispatch as one task", "single"))];
+}
+
 const STATUS = { anchored: "anchored", moved: "moved?", outdated: "outdated" };
 
 // Last round's comments, read-only, each with where it landed in the current file.
@@ -75,5 +86,6 @@ export function sidePanel(p) {
     .children((p.changes?.comments ?? []).map((c, i) => lastRoundCard({ t, c, i })))
     .children(pending.length || p.submitting ? [submitButton(p)] : [])
     .children(p.onApprove ? [approveButton(p)] : [])
+    .children(skipButtons(p))
     .children(error ? [div().text_size(12).text_color(t.blocked).whitespace_normal().child(error)] : []);
 }

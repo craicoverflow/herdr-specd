@@ -30,3 +30,8 @@ test("sortSummaries: by ID, natural order", () => {
   const out = sortSummaries([{ id: "P-10" }, { id: "P-2" }, { id: "A-1" }]).map((s) => s.id);
   assert.deepEqual(out, ["A-1", "P-2", "P-10"]);
 });
+
+test("summarize: a manifest's done items are not counted as tasks", () => {
+  const text = JSON.stringify({ manifest: 1, items: [{ id: "t1", done: true }, { id: "t2" }, { id: "t3", done: false }] });
+  assert.equal(summarize({ id: "A", phase: "build", status: "approved", pending: [] }, { docText: null, tasksText: text }).tasks, 2);
+});

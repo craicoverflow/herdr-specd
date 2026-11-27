@@ -15,10 +15,17 @@ export function findSpecs(adapter, files, { recorded = [], dismissed = [], specP
   const out = [];
   for (const path of files) {
     if (skip.has(path)) continue;
-    for (const m of ms) { const hit = m(path); if (hit) { out.push({ path, id: hit.id }); break; } }
+    let hit = null;
+    for (const m of ms) { hit = m(path); if (hit) break; }
+    // A file named for a ticket (PROJ-123.md, docs/PROJ-123-export.md) is a spec too; its ID is the key.
+    const key = path.split("/").length <= 3 ? JIRA_FILE.exec(path.split("/").pop())?.[1] : null;
+    if (hit) out.push({ path, id: hit.id });
+    else if (key) out.push({ path, id: key });
   }
   return out;
 }
+
+const JIRA_FILE = /^([A-Z][A-Z0-9]{1,9}-\d+)(?:[-_ .][^/]*)?\.md$/;
 
 // Jira-style key from the first heading, else a slug of it, else "".
 export function suggestId(markdown) {
@@ -56,3 +63,29 @@ export const withDismissed = (list, path) => (list.includes(path) ? list : [...l
 
 // Found specs whose path hasn't been announced yet (`seen` is a Set of paths).
 export const unseen = (found, seen) => found.filter((f) => !seen.has(f.path));
+
+/** The spec a plan names on a `Source spec:` line near its top (first path; `code`, "(delta on …)" and "· Task list" tails dropped), or null. */
+export function sourceSpecOf(text) {
+  for (const line of String(text).split("\n").slice(0, 12)) {
+    const m = /^\s*(?:[-*]\s*)?(?:\*\*)?Source spec:?(?:\*\*)?:?\s*`?([^`\s·(]+)`?/i.exec(line);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Does the path a plan names mean this spec? Equal, or one is the other with a leading folder. */
+export const sameSpec = (named, specPath) => named === specPath || specPath.endsWith(`/${named}`) || named.endsWith(`/${specPath}`);
+
+/**
+ * The plan the plan agent wrote for specPath when it saved somewhere else than asked: among
+ * markdown files { path: text }, the shortest path whose `Source spec:` line names the spec (task
+ * lists are not plans), and its task list beside it. { plan, tasks } or null.
+ */
+export function findPlanFor(specPath, files) {
+  const plans = Object.keys(files).filter((p) => p !== specPath && !/(^|\/)(todo|tasks)\.md$/i.test(p) && sameSpec(sourceSpecOf(files[p]) ?? "", specPath));
+  if (!plans.length) return null;
+  const plan = plans.sort((a, b) => a.length - b.length)[0];
+  const dir = plan.includes("/") ? plan.slice(0, plan.lastIndexOf("/") + 1) : "";
+  const tasks = ["todo.md", "tasks.md"].map((n) => dir + n).find((p) => files[p] != null) ?? null;
+  return { plan, tasks };
+}

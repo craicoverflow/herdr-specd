@@ -21,11 +21,11 @@ const absolute = (folder, path) => (path.startsWith("/") ? path : resolveRepo(fo
  * One row per item in dependency order: what to create and the prompt it gets.
  * `folder` is the spec folder (the one holding .specd).
  */
-export function dispatchRows({ tasks, state, adapter, config, folder, planText }) {
+export function dispatchRows({ tasks, state, adapter, config, folder, planText, docs }) {
   const build = adapter.phases.build;
   const { model, effort } = resolveModels(adapter, config, state).build;
   const specPath = absolute(folder, state.paths.spec);
-  const planPath = absolute(folder, state.paths.plan);
+  const planPath = state.paths.plan ? absolute(folder, state.paths.plan) : null;
   return orderItems(tasks.items).map((item) => ({
     item,
     specId: state.id,
@@ -35,7 +35,7 @@ export function dispatchRows({ tasks, state, adapter, config, folder, planText }
     model,
     effort,
     promptFile: `${folder.replace(/\/$/, "")}/.specd/specs/${state.id}/prompts/${item.id}.md`,
-    promptText: buildPrompt(item, { adapter, specPath, planPath, planText }),
+    promptText: buildPrompt(item, { adapter, specPath, planPath, planText, docs }),
   }));
 }
 

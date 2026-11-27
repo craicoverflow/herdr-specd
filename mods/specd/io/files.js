@@ -4,7 +4,8 @@ import { readTextFile, writeTextFile } from "herdr";
 import { parseState, prepareWrite, currentDocPath, shownDocPath } from "../core/state.js";
 import { planAdoption } from "../core/adopt.js";
 import { summarize, sortSummaries } from "../core/summary.js";
-import { findSpecs, matcher, pickPlan, parseDismissed, withDismissed } from "../core/found.js";
+import { findSpecs, matcher, pickPlan, parseDismissed, withDismissed, findPlanFor, sourceSpecOf, sameSpec } from "../core/found.js";
+import { hashText } from "../core/manifest.js";
 import { roundDir, baseName, reviewRecord } from "../core/submit.js";
 
 const join = (folder, rel) => (rel.startsWith("/") ? rel : `${folder.replace(/\/$/, "")}/${rel}`);
@@ -37,7 +38,9 @@ export async function loadSpecs(folder) {
       const state = parseState(text);
       const docPath = currentDocPath(state) ?? state.paths?.spec;
       const docText = docPath ? await read(join(folder, docPath)) : null;
-      const tasksText = state.paths?.tasks ? await read(join(folder, state.paths.tasks)) : null;
+      // the Tasks column: the dispatch list (manifest.json), else a legacy tasks.json
+      const tasksText = (await read(`${dir}/${name}/manifest.json`))
+        ?? (/\.json$/i.test(state.paths?.tasks ?? "") ? await read(join(folder, state.paths.tasks)) : null);
       rows.push({ ...summarize(state, { docText, tasksText }), dir: name, specPath: state.paths?.spec ?? null });
     } catch (e) {
       errors.push({ id: name, message: String(e?.message ?? e) });
@@ -71,9 +74,18 @@ export async function usedIds(folder) {
   }
 }
 
+/** The spec file each recorded spec points at: [{ id, spec }]. Unreadable records are left out. */
+async function recordedSpecs(folder) {
+  const out = [];
+  for (const id of await usedIds(folder)) {
+    try { out.push({ id, spec: parseState((await read(`${specsDir(folder)}/${id}/state.json`)) ?? "").paths?.spec }); } catch { /* not a spec */ }
+  }
+  return out;
+}
+
 /** S2: register picked files as a spec ({id, spec, plan?, tasks?}); returns the new state. Throws a message fit to show. */
 export async function adoptFiles(folder, { id, spec, plan, tasks }) {
-  const state = planAdoption({ folder, id, spec, plan, tasks, existingIds: await usedIds(folder) });
+  const state = planAdoption({ folder, id, spec, plan, tasks, existingIds: await usedIds(folder), recorded: await recordedSpecs(folder) });
   if (!(await read(spec))) throw new Error(`Can't read ${spec}.`);
   await writeTextFile(`${specsDir(folder)}/${state.id}/state.json`, prepareWrite(state, null), null);
   return state;
@@ -153,6 +165,38 @@ export async function adoptFound(folder, adapter, found, id) {
   for (const p of candidates) plans[p] = (await read(`${folder}/${p}`)) ?? "";
   const plan = pickPlan(adapter, found.path, plans);
   return adoptFiles(folder, { id, spec: `${folder}/${found.path}`, plan: plan ? `${folder}/${plan}` : null, tasks: null });
+}
+
+/**
+ * Markdown files that already name this spec on a `Source spec:` line, as { path: hash }: taken when
+ * the plan agent starts, so an older plan for the same spec is never mistaken for the new one.
+ */
+export async function plansNaming(folder, specPath) {
+  const out = {};
+  for (const f of await listMarkdown(folder)) {
+    const text = (await read(`${folder}/${f}`)) ?? "";
+    if (sameSpec(sourceSpecOf(text) ?? "", specPath)) out[f] = hashText(text);
+  }
+  return out;
+}
+
+/**
+ * The plan agent saved somewhere other than the asked-for path: the plan (and task list beside it)
+ * whose `Source spec:` line names this spec and that is new or changed since the agent started
+ * (state.planSeen). Returns the state with those paths, or null.
+ */
+export async function relocatePlan(folder, state) {
+  const p = state.paths;
+  if (!p.plan || !state.planSeen || (await read(join(folder, p.plan))) != null) return null;
+  const files = {};
+  for (const f of await listMarkdown(folder)) {
+    const text = (await read(`${folder}/${f}`)) ?? "";
+    if (state.planSeen[f] !== hashText(text)) files[f] = text;
+  }
+  const hit = findPlanFor(p.spec, files);
+  if (!hit) return null;
+  const { planSeen: _, ...rest } = state;
+  return { ...rest, paths: { ...p, plan: hit.plan, ...(hit.tasks ? { tasks: hit.tasks } : {}) } };
 }
 
 /** The document text kept at the last Submit (round n-1), or null when there was none. */

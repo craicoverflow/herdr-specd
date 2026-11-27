@@ -8,17 +8,22 @@ tasks to [Shepherdr](https://herdr.dev) workers in git worktrees.
 
 ## What it does
 
-- **Spec units.** A spec has an ID (a Jira key such as `PROJ-123`, or a slug). Files live in
-  `specs/<ID>/spec.md`, `plan.md`, `tasks.json`; specd's own state is in `.specd/specs/<ID>/`.
+- **Spec units.** A spec has an ID (a Jira key such as `PROJ-123`, a slug, or `003-name`). New
+  specs live in `specs/<ID>/spec.md`, `plan.md`, `todo.md`; adopted ones stay where they are, in
+  whatever format they have. specd's own state is in `.specd/specs/<ID>/`.
 - **Review like a PR.** Select text, comment, build a pending review, then **Submit** it as one
   message to the agent that owns the file. Every round is kept: the next round marks `NEW` and
   `CHANGED` sections and shows whether last round's comments are anchored, moved or outdated.
 - **Diagrams.** Mermaid fences render as pictures (click one to open it full size).
-- **Phases and dispatch.** Approving the spec starts the plan agent; approving the plan validates
-  `tasks.json` and shows every `herdr-task` command before anything runs. **Confirm** creates the
-  Shepherdr tasks in dependency order, one worktree per task, across repos.
+- **Phases and dispatch.** Approving the spec starts the plan agent with its native command
+  (`/agent-skills:plan`), told only where to save. Approving the plan works out the task list from
+  the spec, plan and task list, whatever their format (one model call, cached until a file changes),
+  and shows every `herdr-task` command before anything runs. **Confirm** creates the Shepherdr tasks
+  in dependency order, one worktree per task, across repos. A spec that is already a plan (an RFC, a
+  plan-mode document) or a small ticket can skip the plan phase.
 - **Found specs.** Specs written by hand (`SPEC.md`, `SPEC-<id>.md`, `docs/SPEC.md`,
-  `spec/<id>.md`, `specs/<id>/spec.md`) show under "Found" for one-click adoption.
+  `spec/<id>.md`, `specs/<id>/spec.md`, `rfcs/<id>.md`, ticket files such as `PROJ-123.md`) show
+  under "Found" for one-click adoption.
 
 Round 2 of a review: new and changed sections are marked, last round's comments re-anchored.
 
@@ -74,8 +79,8 @@ In the pane header's **Diagrams** settings, set **puppeteer config** to `~/.mmdc
 ## Try it on the example
 
 [`examples/checkout`](examples/checkout) is a two-repo folder (`api/`, `web/`) with one spec,
-`SHOP-42` (saved carts): a spec with two mermaid diagrams, a plan, and a `tasks.json` with
-tasks and checkpoints across both repos.
+`SHOP-42` (saved carts): a spec with two mermaid diagrams, a plan, and a `tasks.json` (the format
+older specd versions wrote, still read as it is) with tasks and checkpoints across both repos.
 
 ```sh
 cp -R herdr-specd/examples/checkout ~/checkout-demo && cd ~/checkout-demo

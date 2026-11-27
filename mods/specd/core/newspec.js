@@ -33,7 +33,12 @@ export function planApproval({ adapter, state, config }) {
   const next = approve(state);
   if (next.phase !== "plan") throw new Error("Only a spec in review is approved here.");
   const chosen = resolveModels(adapter, config, next);
-  const { spec, plan, tasks } = state.paths;
+  // An adopted spec has no plan or task-list path yet: the adapter's default location, so the plan
+  // agent never gets "undefined". The native planner writes a markdown task list, so a tasks.json
+  // path from an older specd becomes todo.md beside it.
+  next.paths = { ...resolvePaths(adapter, state.id, config), ...state.paths };
+  if (/\.json$/i.test(next.paths.tasks)) next.paths.tasks = next.paths.tasks.replace(/[^/]*$/, "todo.md");
+  const { spec, plan, tasks } = next.paths;
   const message = fillPrompt(adapter, "plan", { id: state.id, brief: state.brief, specPath: spec, planPath: plan, tasksPath: tasks });
   return { state: next, model: chosen.plan, message };
 }

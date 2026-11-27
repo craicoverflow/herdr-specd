@@ -20,8 +20,9 @@ export function prLink(t) {
 }
 
 /**
- * items: tasks.json items. created: item id -> task ref. lists: repo folder -> listed tasks
- * (null when listing failed). Returns { groups: [{ repo, done, total, items }], done, total }.
+ * items: the dispatch list (manifest or tasks.json items). created: item id -> task ref. lists:
+ * repo folder -> listed tasks (null when listing failed). An item the plan had already marked done
+ * was never dispatched and counts as done. Returns { groups: [{ repo, done, total, items }], done, total }.
  */
 export function buildGroups({ items, created = {}, lists = {}, folder }) {
   const groups = new Map();
@@ -31,7 +32,7 @@ export function buildGroups({ items, created = {}, lists = {}, folder }) {
     const listed = ref ? lists[dir]?.find((t) => t.ref === ref) : null;
     const row = {
       id: item.id, title: item.title, ref,
-      state: !ref ? "not created" : listed ? taskState(listed) : "unknown",
+      state: item.done && !ref ? "done" : !ref ? "not created" : listed ? taskState(listed) : "unknown",
       pr: listed ? prLink(listed) : null,
     };
     if (!groups.has(item.repo)) groups.set(item.repo, { repo: item.repo, done: 0, total: 0, items: [] });
