@@ -2,8 +2,9 @@
 // Never start async work from render(): work starts in init, timers or commands.
 import { View, div } from "gpui-kit";
 import { ScrollHandle, InputState } from "gpui-base";
-import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, window, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
+import { readTextFile, focused, spaces, props, panes, run, shared, setShared, theme, nextCommand, watchFolder, window, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
+import { placeFor, commandOf, requestFor, takeRequest, tabHost } from "./core/place.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
@@ -63,6 +64,15 @@ export default class Specd extends View {
     // A natural-size diagram window is this same mod opened with a `diagram` prop: it shows the picture only.
     this.zoom = props()?.diagram ?? null;
     if (this.zoom) return;
+    // In the `specd` layout a copy that opened as a tab (a palette command) hands its request to
+    // the panel copy and closes its own tab; the panel copy takes it in pollRequest.
+    const place = placeFor(shared("layout"));
+    const host = place === "panel" ? tabHost(panes(), f?.tab) : null;
+    if (host) {
+      this.handOff(host, cx);
+      return;
+    }
+    this.lastReq = 0;
     this.diagrams = new Diagrams();
     this.docW = 800;
     this.settingsOpen = false;
@@ -89,6 +99,13 @@ export default class Specd extends View {
     this.newInputs.id.on("submit", (_e, cx) => this.startNew(cx));
     this.newInputs.brief.on("submit", (_e, cx) => this.startNew(cx));
     if (this.creating) cx.spawn(async (cx) => { await this.fillModels(); cx.notify(); });
+    if (place === "panel") {
+      // A request written before this copy started (its stack child wasn't running) is taken now,
+      // later ones on the poll.
+      const poll = (cx) => cx.spawn(async (cx) => { if (await this.pollRequest(cx)) cx.notify(); });
+      poll(cx);
+      cx.timer.every(POLL_MS, poll);
+    }
     if (!this.folder) return;
 
     cx.spawn(async (cx) => {
@@ -128,6 +145,32 @@ export default class Specd extends View {
         cx.notify();
       }
     });
+  }
+
+  // Tab copy in the `specd` layout: write the request, show and select the panel's specd child,
+  // then close this tab (after init, so the tab isn't torn down under it).
+  handOff(tab, cx) {
+    this.handedOff = true;
+    setShared("specd.request", requestFor(commandOf(props()), props(), Date.now()));
+    run("layout.show", { id: "panel" });
+    run("layout.select", { stack: "panel-body", child: "specd" });
+    cx.spawn(async () => { run("tab.close", { id: tab }); });
+  }
+
+  // Panel copy: act on a fresh request from a tab copy. True when one was taken.
+  async pollRequest(cx) {
+    const r = takeRequest(shared("specd.request"), this.lastReq, Date.now());
+    if (!r) return false;
+    this.lastReq = r.at;
+    this.creating = null;
+    this.adopting = null;
+    this.newError = null;
+    this.adoptError = null;
+    if (r.cmd === "open") {
+      if (this.folder) await this.back();
+      else { this.selected = null; this.spec = null; }
+    } else await this.command(r.cmd, cx);
+    return true;
   }
 
   // Draw the shown document's diagrams (one at a time). Called from init's tasks, timers and
@@ -872,6 +915,7 @@ export default class Specd extends View {
 
   render(_cx) {
     const t = theme();
+    if (this.handedOff) return div().size_full().bg(t.background);
     if (this.zoom) return zoomView({ t, pic: this.zoom, onClose: () => closeOverlay(props().overlay) });
     if (!this.folder) return div().size_full().p(16).bg(t.background).text_color(t.foreground).child("No folder: focus a terminal first");
     if (this.creating) {
