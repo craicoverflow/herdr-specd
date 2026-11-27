@@ -91,7 +91,11 @@ function lastRoundCard({ t, c, i }) {
 export function sidePanel(p) {
   const { t, pending, error } = p;
   const label = (s) => div().text_size(11).font_semibold().text_color(t.dim).child(s.toUpperCase());
-  return v_flex().id("side").w(300).flex_none().h_full().overflow_y_scrollbar().border_l_1().border_color(t.border).bg(t.surface).p(14).gap(12)
+  // Narrow: under the document, full width, capped so the document keeps most of the height.
+  const frame = p.narrow
+    ? v_flex().id("side").w_full().min_w(0).flex_none().max_h(260).overflow_y_scrollbar().border_t_1().p(12)
+    : v_flex().id("side").w(300).flex_none().h_full().overflow_y_scrollbar().border_l_1().p(14);
+  return frame.border_color(t.border).bg(t.surface).gap(12)
     .child(label("Selection"))
     .child(selection({ t, sel: p.sel, input: p.input }))
     .child(label(`Pending comments · ${pending.length}`))

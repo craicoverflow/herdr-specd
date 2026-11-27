@@ -341,3 +341,13 @@ test("a tab copy never follows the focus", async () => {
   await settle();
   assert.equal(v.folder, a);
 });
+
+test("the review renders at narrow and wide widths without throwing", async () => {
+  const dir = folder("widths", { files: TICKET });
+  await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+  const v = await open(dir, "PROJ-123", noModel);
+  for (const w of [280, 510, 639, 640, 900]) {
+    v.viewW = w;
+    assert.doesNotThrow(() => v.render(cx), String(w));
+  }
+});
