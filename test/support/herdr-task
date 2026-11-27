@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+// FAKE herdr-task for headless tests: keeps tasks in $SPECD_TEST_TASKDB (JSON), never touches Shepherdr.
+// add (--json -> {"ref","mode"}), start, list --json. Anything else exits 2.
+import fs from "node:fs";
+
+const db = process.env.SPECD_TEST_TASKDB;
+if (!db) { console.error("fake herdr-task: SPECD_TEST_TASKDB not set"); process.exit(3); }
+const load = () => { try { return JSON.parse(fs.readFileSync(db, "utf8")); } catch { return { next: 1, tasks: [] }; } };
+const save = (d) => fs.writeFileSync(db, JSON.stringify(d, null, 2));
+const argv = process.argv.slice(2);
+const sub = argv.shift();
+const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
+const d = load();
+if (sub === "add") {
+  const title = argv[0];
+  const after = (opt("--after") ?? "").split(",").filter(Boolean);
+  for (const a of after) if (!d.tasks.some((t) => t.ref === a)) { console.error(`add: --after ${a}: no such task`); process.exit(1); }
+  const pf = opt("--prompt-file");
+  if (pf && !fs.existsSync(pf)) { console.error(`add: --prompt-file ${pf}: not found`); process.exit(1); }
+  const ref = `T-${d.next++}`;
+  d.tasks.push({ ref, title, folder: opt("--folder"), after, model: opt("--model"), promptFile: pf, state: "queued" });
+  save(d);
+  console.log(argv.includes("--json") ? JSON.stringify({ ref, mode: "worktree" }) : ref);
+} else if (sub === "start") {
+  const t = d.tasks.find((x) => x.ref === argv[0]);
+  if (!t) { console.error(`start: no task ${argv[0]}`); process.exit(1); }
+  t.started = true;
+  save(d);
+} else if (sub === "list") {
+  const folder = opt("--folder");
+  console.log(JSON.stringify({ tasks: d.tasks.filter((t) => !folder || t.folder === folder) }));
+} else { console.error(`fake herdr-task: unsupported subcommand ${sub}`); process.exit(2); }
