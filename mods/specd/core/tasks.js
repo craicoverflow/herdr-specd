@@ -2,6 +2,8 @@
 // imports (the transcript file reader takes readFile as a parameter).
 import { fillPrompt } from "./adapters.js";
 import { checkpointInstructions } from "./instructions.js";
+import { sourceBlock } from "./manifest.js";
+import { sourceSpecOf, sameSpec } from "./found.js";
 
 const ID_RE = /^[a-z][a-z0-9-]*$/;
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -27,7 +29,7 @@ export function extractSection(planText, heading) {
   return lines.slice(hs[at].line, next ? next.line : lines.length).join("\n").trimEnd();
 }
 
-function findCycle(items) {
+export function findCycle(items) {
   const byId = new Map(items.map((i) => [i.id, i]));
   const state = new Map(); // id -> 1 visiting, 2 done
   const stack = [];
@@ -45,7 +47,14 @@ function findCycle(items) {
   return null;
 }
 
-/** The plan's `Source spec:` line against the spec's path: { errors, warnings }. */
+/** The plan view's note: an error only when the plan says it is for another spec. Native plans need no `Source spec:` line. */
+export function planNote(planText, specPath) {
+  const named = sourceSpecOf(planText);
+  const errors = named && !sameSpec(named, specPath) ? [`This plan says it is for ${named}, not ${specPath}.`] : [];
+  return { errors, warnings: [] };
+}
+
+/** tasks.json (version 1, legacy): the plan's `Source spec:` line against the spec's path: { errors, warnings }. */
 export function checkSourceSpec(planText, specPath) {
   const errors = [];
   const warnings = [];
@@ -143,9 +152,16 @@ export function orderItems(items) {
 }
 
 /** The prompt file text for one item. */
-export function buildPrompt(item, { adapter, specPath, planPath, planText }) {
+export function buildPrompt(item, { adapter, specPath, planPath, planText, docs }) {
+  const block = item.source && docs?.[item.source.file] != null ? sourceBlock(docs[item.source.file], item.source) : null;
+  const notes = item.notes ? `\n\nNotes: ${item.notes}` : "";
   if (item.kind === "checkpoint") {
-    return checkpointInstructions({ specPath, planPath, title: item.title, checks: item.checks });
+    const head = checkpointInstructions({ specPath, planPath, title: item.title, checks: item.checks });
+    return block ? `${head}\n\n---\n\n${block}\n${notes}` : head;
+  }
+  if (item.source) {
+    const head = fillPrompt(adapter, "build", { specPath, planPath, section: item.title, source: item.source });
+    return `${head}\n\n---\n\n${block ?? ""}\n${notes}`;
   }
   const head = fillPrompt(adapter, "build", { specPath, planPath, section: item.section });
   const body = extractSection(planText, item.section);

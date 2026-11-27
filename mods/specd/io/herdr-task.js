@@ -40,11 +40,11 @@ export async function writePromptFile(path, text) {
   await writeTextFile(path, text, await read(path));
 }
 
-/** Read and validate the spec's tasks.json against plan.md and the repos on disk: { tasks, errors, warnings, planText }. */
+/** Read and validate a legacy tasks.json (version 1) against plan.md and the repos on disk: { tasks, errors, warnings, planText }. */
 export async function loadTasks(folder, state) {
   const abs = (p) => (p.startsWith("/") ? p : resolveRepo(folder, p));
   const text = await read(abs(state.paths.tasks));
-  const planText = (await read(abs(state.paths.plan))) ?? undefined;
+  const planText = state.paths.plan ? ((await read(abs(state.paths.plan))) ?? undefined) : undefined;
   let repos = new Set();
   try {
     const items = JSON.parse(text ?? "null")?.items;
@@ -68,8 +68,3 @@ export async function listTasks(dir) {
   try { return JSON.parse(await runTask(["herdr-task", "list", "--json", "--folder", dir]))?.tasks ?? null; } catch { return null; }
 }
 
-/** tasks.json's items for the build view; [] when unreadable. */
-export async function loadItems(folder, state) {
-  const p = state.paths.tasks;
-  try { const items = JSON.parse((await read(p.startsWith("/") ? p : resolveRepo(folder, p))) ?? "null")?.items; return Array.isArray(items) ? items : []; } catch { return []; }
-}

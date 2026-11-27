@@ -22,8 +22,8 @@ test("S1 createSpec: spec phase, drafting, round 1, defaults", () => {
   assert.deepEqual(s.models, { spec: "opus", plan: "opus", build: "sonnet" });
 });
 
-test("S1 createSpec: ID must match [A-Za-z][A-Za-z0-9-]*, brief required", () => {
-  for (const id of ["", "1abc", "a b", "a/b", "a_b", "../x"]) {
+test("S1 createSpec: ID must match [A-Za-z0-9][A-Za-z0-9-]*, brief required", () => {
+  for (const id of ["", "-abc", "a b", "a/b", "a_b", "../x"]) {
     assert.throws(() => createSpec({ ...base, id, paths }), /ID/, id);
   }
   assert.throws(() => createSpec({ ...base, brief: "  ", paths }), /brief/i);
@@ -64,7 +64,7 @@ test("S2 adoptSpec: spec only -> spec/review; spec and plan -> plan/review", () 
 test("S2 adoptSpec: refuses no spec file, bad ID, plan without spec, existing ID", () => {
   assert.throws(() => adoptSpec({ id: "X", paths: {} }), /spec file/);
   assert.throws(() => adoptSpec({ id: "X", paths: { plan: "p.md" } }), /spec file/);
-  assert.throws(() => adoptSpec({ id: "9x", paths: { spec: "s.md" } }), /ID/);
+  assert.throws(() => adoptSpec({ id: "-9x", paths: { spec: "s.md" } }), /ID/);
   assert.throws(() => adoptSpec({ id: "X", paths: { spec: "s.md" }, existingIds: ["X"] }), /already exists/);
 });
 

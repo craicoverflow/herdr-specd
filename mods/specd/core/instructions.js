@@ -24,34 +24,21 @@ export function tasksExample(id) {
   };
 }
 
-export function planInstructions({ id, specPath, planPath, tasksPath }) {
+export function planInstructions({ specPath, planPath, tasksPath }) {
   return [
-    "specd is the external tracker for this plan's task list.",
-    `Write the plan to exactly this path: ${planPath}`,
-    `Its first line must be: Source spec: ${specPath}`,
-    "Give each task its own section headed \"## Task N: <title>\" (for example \"## Task 1: Add the endpoint\").",
-    `Record every task and checkpoint in ${tasksPath} instead of tasks/todo.md. Do not create tasks/todo.md.`,
-    "Keep the plan's Task List as an ordered index of item IDs (t1, t2, c1).",
-    "",
-    `${tasksPath} must have exactly this shape (specd checks it before anything is dispatched; nothing else is needed):`,
-    JSON.stringify(tasksExample(id), null, 2),
-    "",
-    "Rules:",
-    `- "tasks" is 1 and "spec" is the spec's ID, ${id}.`,
-    '- "id": lowercase letters, digits and dashes, unique (t1, t2, c1).',
-    '- "kind": "task" or "checkpoint".',
-    '- "repo": the git repository the item runs in, as a path relative to the folder this spec lives in ("." when that folder is the repository).',
-    '- "section" (tasks only): the exact text of that task\'s heading in the plan, without the "## ".',
-    '- "deps": the ids of items that must be done first; no cycles.',
-    '- A checkpoint has at least one dep and at least one entry in "checks".',
+    `Plan the spec at ${specPath}.`,
+    `Save the plan to ${planPath} and the task list to ${tasksPath}.`,
   ].join("\n");
 }
 
-export function taskInstructions({ specPath, planPath, section }) {
+export function taskInstructions({ specPath, planPath, section, source }) {
+  const focus = source
+    ? `Build only this task: "${section}" (${source.file}, lines ${source.startLine}-${source.endLine}, quoted below). Do not start other tasks from the plan, even small ones.`
+    : `Build only this task: the plan's section "${section}". Do not start other tasks from the plan, even small ones.`;
   return [
     `Spec: ${specPath}`,
-    `Plan: ${planPath}`,
-    `Build only this task: the plan's section "${section}". Do not start other tasks from the plan, even small ones.`,
+    ...(planPath && planPath !== specPath ? [`Plan: ${planPath}`] : []),
+    focus,
     "Don't mark this or any other task complete in plan.md, tasks/todo.md or any checklist. Shepherdr tracks status, and other workers build other tasks in parallel.",
     "When it's committed and its verification passes, run `herdr-task ready`.",
   ].join("\n");
@@ -60,7 +47,7 @@ export function taskInstructions({ specPath, planPath, section }) {
 export function checkpointInstructions({ specPath, planPath, title, checks }) {
   return [
     `Spec: ${specPath}`,
-    `Plan: ${planPath}`,
+    ...(planPath && planPath !== specPath ? [`Plan: ${planPath}`] : []),
     `This is the checkpoint "${title}". Run these checks and change nothing:`,
     ...checks.map((c) => `- ${c}`),
     "Report what passed and what failed. Don't mark anything complete in plan.md, tasks/todo.md or any checklist.",

@@ -4,14 +4,14 @@
 export const STATE_VERSION = 1;
 export const PHASES = ["spec", "plan", "build", "done"];
 const STATUSES = ["drafting", "review", "approved"];
-const ID_RE = /^[A-Za-z][A-Za-z0-9-]*$/;
+const ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const DEFAULT_MODELS = { spec: "opus", plan: "opus", build: "sonnet" };
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 function checkId(id, existingIds) {
   if (typeof id !== "string" || !ID_RE.test(id)) {
-    throw new Error(`Invalid ID "${id}": use letters, digits and dashes, starting with a letter.`);
+    throw new Error(`Invalid ID "${id}": use letters, digits and dashes, starting with a letter or digit.`);
   }
   if ((existingIds ?? []).includes(id)) throw new Error(`A spec with ID ${id} already exists in this folder.`);
 }
@@ -85,6 +85,23 @@ export function approve(s) {
     next.phase = "build";
     next.status = "approved";
   }
+  return next;
+}
+
+/**
+ * Skip the plan phase: the spec in review goes straight to build (saved once its dispatch is done).
+ * `asPlan`: the spec is also the plan (an RFC, a plan-mode document), so its text is what gets
+ * split into tasks. Otherwise the whole spec is one task.
+ */
+export function skipPlan(s, { asPlan }) {
+  if (s.phase !== "spec" || s.status !== "review") throw new Error(`Nothing to skip: the spec is ${s.phase === "spec" ? s.status : "past review"}.`);
+  if (s.pending.length > 0) throw new Error(`Submit or remove the ${s.pending.length} pending comment${s.pending.length === 1 ? "" : "s"} first.`);
+  const next = clone(s);
+  // as the plan: the spec's own text is split into tasks; else the whole spec is one task (no plan, no task list)
+  next.paths = asPlan ? { ...next.paths, plan: s.paths.spec } : { spec: s.paths.spec };
+  next.phase = "build";
+  next.status = "approved";
+  next.round = 1;
   return next;
 }
 

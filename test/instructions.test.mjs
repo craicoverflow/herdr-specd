@@ -1,5 +1,5 @@
-// The plan prompt must carry tasks.json's schema (e2e 2026-11-26: without it, 1 of 3 plan agents
-// wrote a valid file on its own). Its example must pass specd's own validator.
+// The plan prompt names only a location (native planning is untouched). tasksExample is still the
+// legacy tasks.json v1 shape, which must keep validating.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,21 +12,10 @@ import { createSpec, documentReady } from "../mods/specd/core/state.js";
 const paths = { spec: "specs/PROJ-1/spec.md", plan: "specs/PROJ-1/plan.md", tasks: "specs/PROJ-1/tasks.json" };
 const block = () => planInstructions({ id: "PROJ-1", specPath: paths.spec, planPath: paths.plan, tasksPath: paths.tasks });
 
-test("plan prompt: names the paths, the Source spec line and no todo.md", () => {
+test("plan prompt: only the location, no format override", () => {
   const b = block();
-  assert.match(b, /exactly this path: specs\/PROJ-1\/plan\.md/);
-  assert.match(b, /Source spec: specs\/PROJ-1\/spec\.md/);
-  assert.match(b, /Do not create tasks\/todo\.md/);
-});
-
-test("plan prompt: carries tasks.json's schema as an example with this spec's ID", () => {
-  const b = block();
-  const example = JSON.stringify(tasksExample("PROJ-1"), null, 2);
-  assert.ok(b.includes(example), "the example JSON is in the prompt verbatim");
-  for (const field of ['"tasks": 1', '"spec": "PROJ-1"', '"kind": "task"', '"kind": "checkpoint"', '"repo"', '"section"', '"deps"', '"checks"']) {
-    assert.ok(b.includes(field), `prompt mentions ${field}`);
-  }
-  assert.match(b, /## Task 1:/, "says each task gets its own '## Task N: …' section");
+  assert.equal(b, "Plan the spec at specs/PROJ-1/spec.md.\nSave the plan to specs/PROJ-1/plan.md and the task list to specs/PROJ-1/tasks.json.");
+  assert.doesNotMatch(b, /Source spec|## Task N|"tasks": 1|Do not create/);
 });
 
 test("plan prompt: its example passes specd's own validator", () => {
@@ -35,10 +24,11 @@ test("plan prompt: its example passes specd's own validator", () => {
   assert.deepEqual(validateTasks(ex, { specId: "PROJ-1", specPath: paths.spec, planText, isRepo: () => true }), { errors: [], warnings: [] });
 });
 
-test("planApproval: the plan agent's first message has the schema with the spec's ID", () => {
+test("planApproval: the plan agent's first message is the native command plus a location", () => {
   const adapter = loadAdapter(readFileSync(new URL("../mods/specd/adapters/agent-skills.json", import.meta.url), "utf8"));
   const state = documentReady(createSpec({ id: "PROJ-1", brief: "b", adapter: "agent-skills", paths, models: {} }));
   const { message } = planApproval({ adapter, state, config: null });
-  assert.match(message, /^\/agent-skills:plan/);
-  assert.ok(message.includes('"spec": "PROJ-1"'));
+  assert.match(message, /^\/agent-skills:plan\n\nPlan the spec at specs\/PROJ-1\/spec\.md\./);
+  // the spec was made with an older specd's tasks.json path: the native planner gets todo.md beside it
+  assert.match(message, /Save the plan to specs\/PROJ-1\/plan\.md and the task list to specs\/PROJ-1\/todo\.md\.$/);
 });

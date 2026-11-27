@@ -27,7 +27,7 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 - **Margin marks** in rounds 2+: a 64px column with `NEW` (accent) or `CHANGED` (working color).
 - **Dispatch preview** and **Build** views: rows by task with repo, dependencies, model and the
   exact `herdr-task add` argv; later, tasks grouped by repo with their Shepherdr state and `n/m done`.
-- **Forms**: New spec (ID, brief, adapter, models, folder) and Adopt spec (spec, plan, tasks files, ID).
+- **Forms**: New spec (ID, brief, adapter, models, folder) and Adopt spec (spec, plan, task list in any format, ID).
 
 ## How it behaves
 
@@ -39,12 +39,26 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 - **Submit** sends one numbered message (line numbers, `>`-quoted source, one closing instruction)
   to the owner agent with `hc send`; if the owner's terminal is gone it opens a new `<ID> <phase>`
   agent tab whose first message is the review. The round is saved and the status returns to drafting.
-- **Approve** is disabled with pending comments. Approving a spec opens the `<ID> plan` agent;
-  approving a plan validates `tasks.json` (cycles, unknown repos, bad ids: all errors listed,
-  nothing created, **Send to plan agent** returns them), then shows a preview; **Confirm** runs
-  `herdr-task add --json` per item in dependency order, then `herdr-task start`. A failure keeps the
-  refs made; running again creates only the missing ones. Workers get `--permission-mode auto`
-  only when the plan agent's session is in auto mode.
+- **Approve** is disabled with pending comments. Approving a spec opens the `<ID> plan` agent with
+  the adapter's native command and only a location ("Save the plan to `specs/<ID>/plan.md` and the
+  task list to `specs/<ID>/todo.md`"); an adopted spec gets those default paths. If the agent saves
+  elsewhere, the plan whose `Source spec:` line names the spec is found (never one that was already
+  there). Approving a plan works out the dispatch list: one `claude -p` call (sonnet, JSON schema, no
+  tools) over every document of the spec, checked (repo is a git repo in the folder, deps exist, no
+  cycle, line ranges inside the files) with one retry, kept in `.specd/specs/<ID>/manifest.json` with
+  the files' hashes. Items marked done (`[x]`, struck out) are left out and nothing waits for them.
+  The preview shows each item's repo, deps and source lines; **Ask again** takes a note ("one task
+  per phase") that is kept for later re-derives. A failure shows its errors and **Try again**; a
+  legacy `tasks.json` is read as it is (**Send to plan agent** returns its errors).
+- **Skip planning**: a spec in review can be dispatched as its own plan (**Use the spec as the
+  plan**) or as **one task** (no model call; an error naming the task when the folder holds several
+  repos and isn't one itself). The spec goes to build only when the dispatch is confirmed.
+- **Confirm** first checks the files: if one changed since the preview, the list is worked out again
+  (passing the earlier ids) and, if it differs, shown with "todo.md changed since this list was made:
+  10 → 11 tasks · new: …" instead of being dispatched. Then `herdr-task add --json` per item in
+  dependency order, then `herdr-task start`. A failure keeps the refs made; running again creates
+  only the missing ones. Workers get `--permission-mode auto` only when the plan agent's session is
+  in auto mode.
 - **Diagrams**: rendering shows the source and a spinner, then a PNG; a failure or missing `mmdc`
   leaves the source with a note. Clicking a diagram opens it at natural size, scrollable. Switching
   Herdr's theme re-renders.
@@ -58,8 +72,9 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
   entries running `tab.new` for this mod (`specd: Open`, `specd: New spec` with `props.new`,
   `specd: Adopt spec` with `props.adopt`).
 - `main.js` (one class: init, render, `command(c)` for `top open-first next back approve confirm new
-  adopt`), `core/` (pure logic: state, comments, anchors, pieces, rounds, tasks validation, dispatch,
-  adapters, found, summary), `io/` (files, agents, herdr-task, mermaid), `ui/` (list, document, side,
+  adopt one-task spec-as-plan`), `core/` (pure logic: state, comments, anchors, pieces, rounds, the
+  dispatch list (manifest), legacy tasks validation, dispatch, adapters, found, summary), `io/` (files,
+  agents, herdr-task, manifest, mermaid), `ui/` (list, document, side,
   diagram, new, adopt, dispatch, build), `adapters/agent-skills.json`.
 - Modules: `herdr` (`props`, `spaces`, `focused`, `settings`, `exec`, file picking), `gpui-kit`
   (`div`), `gpui-base` (`v_flex`, `h_flex`, `Input`, `TextView`, `InputState`).
@@ -96,7 +111,10 @@ One mod pane (`place: none`, opened as a tab, focusable), full width, themed fro
 - A selection in a paragraph, a table cell and two list items gives lines matching `sed -n`.
 - Submit sends one message to the owner and saves round 1; round 2 marks edited sections.
 - Approve is disabled with a pending comment.
-- A `tasks.json` with a cycle and an unknown repo shows both errors and creates nothing; a valid one
-  creates every task with the right `--folder`, `--after` and `--model`.
+- A native plan (any layout) previews its tasks with repos and deps after one model call; reopening
+  the preview makes no call; editing `todo.md` after the preview makes Confirm refuse once with what changed.
+- Done items in a half-built plan are left out; a small ticket dispatches as one task with no model call.
+- A legacy `tasks.json` with a cycle and an unknown repo shows both errors and creates nothing; a
+  valid one creates every task with the right `--folder`, `--after` and `--model`.
 - Diagrams render in dark and light, and show as source when `mmdc` is missing.
 - A hand-written `SPEC-auth.md` shows under Found within 2 s and Adopt gives it the ID `auth`.

@@ -33,7 +33,7 @@ test("a used ID is refused and says which one", () => {
 });
 
 test("a bad ID or empty brief is refused", () => {
-  assert.throws(() => planNewSpec({ adapter, id: "1x", brief: "x", existingIds: [] }), /Invalid ID/);
+  assert.throws(() => planNewSpec({ adapter, id: "-x", brief: "x", existingIds: [] }), /Invalid ID/);
   assert.throws(() => planNewSpec({ adapter, id: "A-1", brief: " ", existingIds: [] }), /brief/);
 });
 
@@ -72,16 +72,21 @@ test("approve: not in review gives a reason; a plan in review can be approved (S
   assert.match(approveBlock({ ...inReview(), phase: "build" }), /already approved/);
 });
 
-test("approve: Plan drafting, plan model, prompt names plan.md, Source spec, tasks.json, no todo.md", () => {
+test("approve: Plan drafting, plan model, prompt is the native command plus the plan and task-list paths", () => {
   const { state, model, message } = planApproval({ adapter, state: inReview() });
   assert.equal(state.phase, "plan");
   assert.equal(state.status, "drafting");
   assert.deepEqual(model, { model: "opus", effort: "high" });
   assert.match(message, /^\/agent-skills:plan/);
-  assert.match(message, /exactly this path: specs\/DEMO-1\/plan\.md/);
-  assert.match(message, /first line must be: Source spec: specs\/DEMO-1\/spec\.md/);
-  assert.match(message, /specs\/DEMO-1\/tasks\.json/);
-  assert.match(message, /Do not create tasks\/todo\.md/);
+  assert.match(message, /Save the plan to specs\/DEMO-1\/plan\.md and the task list to specs\/DEMO-1\/todo\.md/);
+});
+
+test("approve: an adopted lone spec gets default plan paths, never 'undefined'", () => {
+  const lone = { ...inReview(), paths: { spec: "SPEC.md" } };
+  const { state, message } = planApproval({ adapter, state: lone });
+  assert.deepEqual(state.paths, { spec: "SPEC.md", plan: "specs/DEMO-1/plan.md", tasks: "specs/DEMO-1/todo.md" });
+  assert.doesNotMatch(message, /undefined/);
+  assert.match(message, /Plan the spec at SPEC\.md/);
 });
 
 test("a plan whose Source spec names another file shows the error", () => {

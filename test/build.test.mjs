@@ -62,3 +62,9 @@ test("shouldPoll only when the window is visible, in build, with nothing in flig
   assert.equal(shouldPoll({ visible: true, phase: "build", busy: true }), false);
   assert.equal(POLL_MS, 10000);
 });
+
+test("an item the plan had already marked done counts as done without a task", () => {
+  const g = buildGroups({ items: [{ id: "t0", title: "Schema", repo: "api", done: true }, ...items], created, lists, folder: "/w" });
+  assert.equal(g.groups[0].items[0].state, "done");
+  assert.deepEqual([g.done, g.total], [2, 4]);
+});

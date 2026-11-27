@@ -5,17 +5,19 @@ import { ScrollHandle, InputState } from "gpui-base";
 import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, window, notify, openOverlay, closeOverlay, checking, pickFiles, pickFolder } from "herdr";
 import { pieces } from "./core/pieces.js";
 import { roundChanges } from "./core/rounds.js";
-import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound } from "./io/files.js";
+import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
 import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
-import { submitReview, setOwner, approve as approveState, shownDocPath } from "./core/state.js";
+import { submitReview, setOwner, approve as approveState, shownDocPath, skipPlan } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
 import { adoptView } from "./ui/adopt.js";
 import { newView } from "./ui/new.js";
 import { planNewSpec, autoReview, planApproval, approveBlock } from "./core/newspec.js";
-import { checkSourceSpec } from "./core/tasks.js";
+import { planNote } from "./core/tasks.js";
+import { sameList } from "./core/manifest.js";
+import { loadPlanned, loadBuildItems, claudeLlm } from "./io/manifest.js";
 import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
@@ -24,11 +26,12 @@ import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { dispatchView } from "./ui/dispatch.js";
 import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
-import { addTask, startTask, writePromptFile, loadTasks, parentMode, listTasks, loadItems } from "./io/herdr-task.js";
+import { addTask, startTask, writePromptFile, parentMode, listTasks } from "./io/herdr-task.js";
 import { buildView } from "./ui/build.js";
 import { buildGroups, repoFolders, shouldPoll, POLL_MS as BUILD_POLL_MS } from "./core/build.js";
 
 const POLL_MS = 1000; // a safety net under watchFolder: the view is never more than this stale
+const RELOCATE_MS = 10000; // how often a missing plan is looked for elsewhere (it walks the folder)
 
 export default class Specd extends View {
   init(_props, cx) {
@@ -52,6 +55,9 @@ export default class Specd extends View {
     this.editing = null; // index of the pending comment being edited
     this.noteError = null;
     this.dispatching = null; // S7: the dispatch view's data
+    this.llm = claudeLlm; // the model call that makes a dispatch list (a seam for headless tests)
+    this.noteInput = InputState.new({ placeholder: "e.g. one task per phase; keep the migration on its own" });
+    this.noteInput.on("submit", (_e, cx) => this.askAgain(cx));
     // A natural-size diagram window is this same mod opened with a `diagram` prop: it shows the picture only.
     this.zoom = props()?.diagram ?? null;
     if (this.zoom) return;
@@ -163,7 +169,8 @@ export default class Specd extends View {
         if (await this.scan(summaries)) changed = true;
       } else {
         try {
-          const spec = await loadSpec(this.folder, this.selected);
+          let spec = await loadSpec(this.folder, this.selected);
+          if (await this.relocate(spec)) spec = await loadSpec(this.folder, this.selected);
           const last = await lastRound(this.folder, spec.state);
           const ready = autoReview(spec.state, spec.doc, last?.doc ?? null);
           if (ready) {
@@ -189,6 +196,18 @@ export default class Specd extends View {
     } finally {
       this.busy = false;
     }
+  }
+
+  // The plan agent saved its plan somewhere else than asked: find it by its `Source spec:` line and
+  // record where it is. Throttled, since it walks the folder. True when the state was saved.
+  async relocate(spec) {
+    if (spec.state.phase !== "plan" || spec.doc != null || Date.now() - (this.relocatedAt ?? 0) < RELOCATE_MS) return false;
+    this.relocatedAt = Date.now();
+    const moved = await relocatePlan(this.folder, spec.state);
+    if (!moved) return false;
+    await saveState(this.folder, moved);
+    notify({ title: `Found the plan for ${moved.id}`, body: moved.paths.plan, level: "info" });
+    return true;
   }
 
   // S11: look for specs nobody registered; one notification per new path. True when the list changed.
@@ -382,7 +401,7 @@ export default class Specd extends View {
       cx.notify();
       return;
     }
-    if (state.phase === "plan") return this.openDispatch(cx);
+    if (state.phase === "plan") return this.openDispatch(cx, { mode: "plan" });
     this.approving = true;
     this.saving = true; // the poll must not reload state.json under a half-finished approval
     this.noteError = null;
@@ -392,8 +411,9 @@ export default class Specd extends View {
         const { adapter } = await adapterFor(this.folder, state);
         const config = await folderConfig(this.folder);
         const plan = planApproval({ adapter, state, config });
+        const planSeen = await plansNaming(this.folder, state.paths.spec); // older plans for this spec, so they're not taken for the new one
         const started = await startAgent(cx, { folder: this.folder, adapter, model: plan.model, name: `${state.id} plan`, message: plan.message });
-        const next = setOwner(plan.state, "plan", started);
+        const next = setOwner({ ...plan.state, planSeen }, "plan", started);
         await saveState(this.folder, next);
         this.spec = { ...this.spec, state: next, path: shownDocPath(this.folder, next), doc: null }; // the plan's path, not the spec's
         this.pieces = [];
@@ -416,7 +436,7 @@ export default class Specd extends View {
     if (!shouldPoll({ visible: window()?.visible, phase: state?.phase, busy: this.buildBusy })) return;
     this.buildBusy = true;
     try {
-      const items = await loadItems(this.folder, state);
+      const items = await loadBuildItems(this.folder, state);
       const dirs = repoFolders(items, this.folder);
       const lists = {};
       await Promise.all(dirs.map(async (d) => { lists[d] = await listTasks(d); }));
@@ -442,31 +462,91 @@ export default class Specd extends View {
     d.previews = previewArgvs(d.rows, created, { review: d.review, adapter: d.adapter, parentMode: d.parentMode });
   }
 
-  openDispatch(cx) {
-    this.dispatching = { loading: true };
+  // A spec in review skips the plan phase: "spec" (its own text is the plan) or "single" (one task).
+  // Nothing changes until Confirm; the refusal reasons are Approve's.
+  skip(mode, cx) {
+    const { state } = this.spec;
+    const block = approveBlock(state);
+    if (block || state.phase !== "spec") {
+      this.noteError = block ?? "Only a spec in review can skip planning.";
+      cx.notify();
+      return;
+    }
+    this.openDispatch(cx, { mode });
+  }
+
+  // The state a mode's list is made for: the plan's, or the spec's own paths when planning is skipped.
+  dispatchTarget(state, mode) {
+    return mode === "plan" ? state : skipPlan(state, { asPlan: mode === "spec" });
+  }
+
+  async listRows(target, r) {
+    const { adapter } = await adapterFor(this.folder, target);
+    const config = await folderConfig(this.folder);
+    return { adapter, rows: dispatchRows({ tasks: { items: r.items }, state: target, adapter, config, folder: this.folder, planText: r.planText ?? "", docs: r.docs }) };
+  }
+
+  // Preview: the list from manifest.json, worked out again (one model call) when there is none yet,
+  // a document changed since, or the person asked again (`note`, or `force` for Try again).
+  openDispatch(cx, { mode = this.dispatching?.mode ?? "plan", note, force = false } = {}) {
+    const state = this.spec.state;
+    let target;
+    try {
+      target = this.dispatchTarget(state, mode);
+    } catch (e) {
+      this.noteError = String(e.message);
+      cx.notify();
+      return;
+    }
+    const review = this.dispatching?.review ?? Boolean(state.dispatch?.review);
+    this.dispatching = { loading: true, mode, legacy: /\.json$/i.test(target.paths.tasks ?? "") };
     this.noteError = null;
     cx.notify();
     cx.spawn(async (cx) => {
       try {
-        const { state } = this.spec;
-        const { adapter } = await adapterFor(this.folder, state);
-        const config = await folderConfig(this.folder);
-        const r = await loadTasks(this.folder, state);
-        if (r.errors.length) {
-          this.dispatching = { errors: r.errors, warnings: r.warnings };
+        const r = await loadPlanned(this.folder, target, { llm: this.llm, note, force });
+        if (r.errors) {
+          this.dispatching = { mode, errors: r.errors, warnings: r.warnings ?? [], legacy: Boolean(r.legacy) };
         } else {
-          const rows = dispatchRows({ tasks: r.tasks, state, adapter, config, folder: this.folder, planText: r.planText ?? "" });
+          const { adapter, rows } = await this.listRows(target, r);
           this.dispatching = {
-            adapter, rows, errors: [], warnings: r.warnings, review: Boolean(state.dispatch?.review),
+            mode, target, adapter, rows, errors: [], warnings: r.warnings ?? [], legacy: Boolean(r.legacy), changed: r.changed, done: r.done, review,
             parentMode: await parentMode(this.folder, state), summary: dispatchSummary(rows, state.dispatch ?? {}),
           };
           this.refreshPreviews();
         }
       } catch (e) {
-        this.dispatching = { errors: [`Couldn't check tasks.json: ${e.message ?? e}`] };
+        this.dispatching = { mode, errors: [`Couldn't make the task list: ${e.message ?? e}`] };
       }
       cx.notify();
     });
+  }
+
+  askAgain(cx) {
+    const d = this.dispatching;
+    if (!d?.rows || d.running || d.legacy || d.mode === "single") return;
+    const note = this.noteInput.value().trim();
+    this.noteInput.set_value("");
+    this.openDispatch(cx, { mode: d.mode, note });
+  }
+
+  // What is dispatched is the list on screen: when a document changed since it was made, the list is
+  // worked out again and, if it differs, shown instead of dispatched. True when it is still good.
+  async stillCurrent(d) {
+    if (d.legacy) return true;
+    d.checking = true;
+    const r = await loadPlanned(this.folder, d.target, { llm: this.llm });
+    d.checking = false;
+    if (r.errors) throw new Error(`Couldn't check the plan again: ${r.errors.join(" ")}`);
+    if (!r.derived) return true;
+    const before = d.rows.map((row) => row.item);
+    const { rows } = await this.listRows(d.target, r);
+    d.rows = rows; // same work: the prompts carry the new text
+    d.done = r.done;
+    if (sameList(before, r.items)) return true;
+    d.changed = `${r.changed ?? "The documents changed, so the list was worked out again"}. Check it, then confirm again.`;
+    d.summary = dispatchSummary(rows, this.spec.state.dispatch ?? {});
+    return false;
   }
 
   confirmDispatch(cx) {
@@ -478,33 +558,39 @@ export default class Specd extends View {
     cx.notify();
     cx.spawn(async (cx) => {
       try {
-        d.parentMode = await parentMode(this.folder, this.spec.state); // the mode at Confirm
-        let state = this.spec.state;
-        const keep = async (next) => {
-          state = next;
-          await saveState(this.folder, state);
-          this.spec = { ...this.spec, state };
-        };
-        const r = await runDispatch({
-          rows: d.rows, dispatch: state.dispatch ?? {}, review: d.review, adapter: d.adapter, parentMode: d.parentMode,
-          add: addTask, start: startTask, writePrompt: writePromptFile,
-          save: async (dispatch) => { await keep({ ...state, dispatch }); d.summary = dispatchSummary(d.rows, dispatch); this.refreshPreviews(); cx.notify(); },
-        });
-        d.summary = dispatchSummary(d.rows, r);
-        d.error = r.error;
-        if (!r.error) {
-          await keep(approveState(state));
-          d.done = true;
-        }
+        if (await this.stillCurrent(d)) await this.dispatchNow(d, cx);
       } catch (e) {
         d.error = `Couldn't dispatch: ${e.message ?? e}`;
       } finally {
         d.running = false;
+        d.checking = false;
         this.saving = false;
       }
       this.refreshPreviews();
       cx.notify();
     });
+  }
+
+  async dispatchNow(d, cx) {
+    d.parentMode = await parentMode(this.folder, this.spec.state); // the mode at Confirm
+    let state = this.spec.state;
+    const keep = async (next) => {
+      state = next;
+      await saveState(this.folder, state);
+      this.spec = { ...this.spec, state };
+    };
+    const r = await runDispatch({
+      rows: d.rows, dispatch: state.dispatch ?? {}, review: d.review, adapter: d.adapter, parentMode: d.parentMode,
+      add: addTask, start: startTask, writePrompt: writePromptFile,
+      save: async (dispatch) => { await keep({ ...state, dispatch }); d.summary = dispatchSummary(d.rows, dispatch); this.refreshPreviews(); cx.notify(); },
+    });
+    d.summary = dispatchSummary(d.rows, r);
+    d.error = r.error;
+    if (!r.error) {
+      // plan -> build; a skipped plan phase goes from spec review straight to build
+      await keep(d.mode === "plan" ? approveState(state) : skipPlan(state, { asPlan: d.mode === "spec" }));
+      d.finished = true;
+    }
   }
 
   toggleDispatchReview(cx) {
@@ -627,7 +713,7 @@ export default class Specd extends View {
 
   pickAdopt(key, cx) {
     cx.spawn(async (cx) => {
-      const picked = await pickFiles({ prompt: { spec: "Choose the spec (markdown)", plan: "Choose the plan (markdown)", tasks: "Choose tasks.json" }[key] });
+      const picked = await pickFiles({ prompt: { spec: "Choose the spec (markdown)", plan: "Choose the plan (markdown)", tasks: "Choose the task list (todo.md, tasks.md or tasks.json)" }[key] });
       const path = picked?.[0];
       if (path) {
         this.adopting = { ...this.adopting, [key]: path };
@@ -696,6 +782,8 @@ export default class Specd extends View {
     } else if (c === "back") await this.back();
     else if (c === "approve") this.approve(cx);
     else if (c === "confirm") this.confirmDispatch(cx);
+    else if (c === "one-task") this.skip("single", cx);
+    else if (c === "spec-as-plan") this.skip("spec", cx);
     else if (c === "new") {
       this.creating = { adapter: "agent-skills", folder: this.folder };
       await this.fillModels();
@@ -727,9 +815,10 @@ export default class Specd extends View {
     }
     if (this.dispatching && this.spec) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        dispatchView({ t, d: this.dispatching, created: this.spec.state.dispatch?.created,
+        dispatchView({ t, d: this.dispatching, created: this.spec.state.dispatch?.created, noteInput: this.noteInput,
           onConfirm: (cx) => this.confirmDispatch(cx), onToggle: (cx) => this.toggleDispatchReview(cx),
-          onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); } }));
+          onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onRetry: (cx) => this.openDispatch(cx, { force: true }),
+          onAskAgain: (cx) => this.askAgain(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); } }));
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");
@@ -746,7 +835,8 @@ export default class Specd extends View {
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
           onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx),
           approveBlock: approveBlock(this.spec.state), approving: this.approving, approveLabel: this.spec.state.phase === "plan" ? "Approve plan" : "Approve spec", onApprove: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? (cx) => this.approve(cx) : null,
-          planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? checkSourceSpec(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
+          onSkip: this.spec.state.phase === "spec" ? (mode, cx) => this.skip(mode, cx) : null,
+          planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? planNote(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
         diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
           settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },

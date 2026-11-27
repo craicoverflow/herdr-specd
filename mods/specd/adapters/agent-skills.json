@@ -2,8 +2,8 @@
   "adapter": 1,
   "id": "agent-skills",
   "name": "agent-skills (Addy Osmani)",
-  "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/tasks.json" },
-  "discover": { "specs": ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md"], "plans": ["tasks/plan.md"] },
+  "paths": { "spec": "specs/{id}/spec.md", "plan": "specs/{id}/plan.md", "tasks": "specs/{id}/todo.md" },
+  "discover": { "specs": ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md", "specs/{id}.md", "rfcs/{id}.md", "docs/rfcs/{id}.md", "docs/rfc/{id}.md"], "plans": ["tasks/plan.md"] },
   "agent": { "argv": ["claude", "--model", "{model}", "--effort", "{effort}", "--session-id", "{session}"] },
   "phases": {
     "spec": { "model": "opus", "effort": "high", "prompt": "/agent-skills:spec {brief}\n\n{specd.spec}" },

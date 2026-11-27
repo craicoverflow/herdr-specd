@@ -10,7 +10,7 @@ const vars = { brief: "Add login", specPath: "specs/P-1/spec.md", planPath: "spe
 test("agent-skills adapter loads", () => {
   const a = shipped();
   assert.equal(a.id, "agent-skills");
-  assert.deepEqual(resolvePaths(a, "P-1"), { spec: "specs/P-1/spec.md", plan: "specs/P-1/plan.md", tasks: "specs/P-1/tasks.json" });
+  assert.deepEqual(resolvePaths(a, "P-1"), { spec: "specs/P-1/spec.md", plan: "specs/P-1/plan.md", tasks: "specs/P-1/todo.md" });
 });
 
 test("a broken adapter reports every problem at once", () => {
@@ -55,7 +55,7 @@ test("prompts are filled with specd blocks", () => {
   assert.ok(spec.startsWith("/agent-skills:spec Add login"));
   assert.ok(spec.includes("specs/P-1/spec.md") && spec.includes("SPEC.md"));
   const plan = fillPrompt(a, "plan", vars);
-  assert.ok(plan.includes("Source spec: specs/P-1/spec.md") && plan.includes("specs/P-1/tasks.json") && plan.includes("tasks/todo.md"));
+  assert.ok(plan.includes("Plan the spec at specs/P-1/spec.md") && plan.includes("specs/P-1/plan.md") && plan.includes("specs/P-1/tasks.json"));
   const build = fillPrompt(a, "build", vars);
   for (const s of ["Task 1: X", "specs/P-1/plan.md", "herdr-task ready", "Don't mark", "incremental-implementation", "test-driven-development"])
     assert.ok(build.includes(s), s);
@@ -77,7 +77,7 @@ test("a filled build prompt never starts its argument text with auto or all", ()
 
 test("discover is optional and validated", () => {
   const a = shipped();
-  assert.deepEqual(a.discover.specs, ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md"]);
+  assert.deepEqual(a.discover.specs, ["SPEC.md", "SPEC-{id}.md", "docs/SPEC.md", "spec/{id}.md", "specs/{id}.md", "rfcs/{id}.md", "docs/rfcs/{id}.md", "docs/rfc/{id}.md"]);
   assert.deepEqual(a.discover.plans, ["tasks/plan.md"]);
   const bad = structuredClone(a); bad.discover = { specs: "SPEC.md", plans: [""] };
   const errs = validateAdapter(bad);
