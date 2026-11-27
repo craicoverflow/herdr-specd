@@ -8,6 +8,9 @@ export const REQUEST_TTL_MS = 10000;
 /** "panel" in the `specd` layout, otherwise "tab". */
 export const placeFor = (layoutName) => (layoutName === "specd" ? "panel" : "tab");
 
+/** True for a copy a palette command opened as a tab: the three entries pass `tab`, `new` or `adopt`. The panel copy has no props. */
+export const isTabCopy = (props) => !!(props?.tab || props?.new || props?.adopt);
+
 /** Which palette command opened this copy, from its props. */
 export const commandOf = (props) => (props?.new ? "new" : props?.adopt ? "adopt" : "open");
 

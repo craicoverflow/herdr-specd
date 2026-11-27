@@ -1,7 +1,7 @@
 // core/place.js: where specd opens (panel or tab) and the request a tab copy hands to the panel copy.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { placeFor, requestFor, takeRequest, commandOf, tabHost, REQUEST_TTL_MS } from "../mods/specd/core/place.js";
+import { placeFor, requestFor, takeRequest, commandOf, isTabCopy, tabHost, REQUEST_TTL_MS } from "../mods/specd/core/place.js";
 
 test("placeFor: the specd layout is a panel, anything else a tab", () => {
   assert.equal(placeFor("specd"), "panel");
@@ -13,6 +13,11 @@ test("commandOf names the palette command from the props it opens with", () => {
   assert.equal(commandOf(undefined), "open");
   assert.equal(commandOf({ new: true }), "new");
   assert.equal(commandOf({ adopt: true }), "adopt");
+});
+
+test("isTabCopy: the palette's tab copies, never the panel copy", () => {
+  for (const p of [{ tab: true }, { new: true }, { adopt: true }]) assert.equal(isTabCopy(p), true);
+  for (const p of [{}, undefined, null, { folder: "/x" }, { diagram: {} }]) assert.equal(isTabCopy(p), false);
 });
 
 test("requestFor keeps the command, its props and the time", () => {
