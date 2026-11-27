@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { run, panes, spaces, hc, readTextFile, appHome } from "herdr";
 import { loadAdapter, resolveModels, agentArgv } from "../core/adapters.js";
 import { findNewTerminal } from "../core/submit.js";
+import { agentChoices } from "../core/owner.js";
 
 const tabs = () => spaces().flatMap((s) => s.tabs);
 
@@ -46,6 +47,9 @@ export async function defaultAdapter() {
 export function ownerAlive(owner) {
   return Boolean(owner?.terminal) && panes().some((p) => p.terminal === owner.terminal);
 }
+
+/** Live agent terminals the person can claim as an owner (`skip`: a terminal to leave out). */
+export const liveAgents = (skip) => agentChoices({ panes: panes(), tabs: tabs(), skip });
 
 /**
  * Open a tab named `name` running the phase's agent with `message` as its first message. Resolves

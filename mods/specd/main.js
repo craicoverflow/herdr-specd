@@ -6,9 +6,10 @@ import { readTextFile, focused, spaces, props, theme, nextCommand, watchFolder, 
 import { pieces } from "./core/pieces.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
-import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, startAgent, sendMessage } from "./io/agents.js";
+import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
+import { claimOwner, needsOwnerPick } from "./core/owner.js";
 import { submitReview, setOwner, approve as approveState, shownDocPath, skipPlan } from "./core/state.js";
 import { suggestId } from "./core/adopt.js";
 import { unseen, suggestId as suggestFromHeading } from "./core/found.js";
@@ -343,7 +344,53 @@ export default class Specd extends View {
 
   // ---- submit (S4): a handler; nothing is sent anywhere until the person presses Submit ----------
 
-  submit(cx) {
+  ownerProps() {
+    const { state } = this.spec;
+    const o = state.owners?.[state.phase];
+    const label = ownerAlive(o) ? `terminal ${o.terminal}` : "none";
+    return { label, pick: this.ownerPick, onOpen: (cx) => this.openOwnerPick(cx), onPick: (c, cx) => this.pickOwner(c, cx),
+      onNew: (cx) => this.startNewOwner(cx), onCancel: (cx) => { this.ownerPick = null; cx.notify(); } };
+  }
+
+  // ---- owner: claim a live agent terminal as the phase's owner ------------------------------------
+
+  openOwnerPick(cx, resume = false) {
+    if (this.saving || this.submitting) return;
+    const { state } = this.spec;
+    const owner = state.owners?.[state.phase];
+    this.ownerPick = { choices: liveAgents(ownerAlive(owner) ? null : owner?.terminal), resume };
+    cx.notify();
+  }
+
+  pickOwner(choice, cx) {
+    const pick = this.ownerPick;
+    if (!pick || this.saving) return;
+    const { state } = this.spec;
+    this.saving = true;
+    cx.spawn(async (cx) => {
+      try {
+        const next = claimOwner(state, state.phase, choice);
+        await saveState(this.folder, next);
+        this.spec = { ...this.spec, state: next };
+        this.ownerPick = null;
+        this.noteError = null;
+      } catch (e) {
+        this.noteError = `Couldn't set the owner: ${e.message ?? e}`;
+      } finally {
+        this.saving = false;
+      }
+      cx.notify();
+      if (pick.resume && !this.noteError) this.submit(cx);
+    });
+  }
+
+  // "Start a new agent": Submit goes ahead and opens a tab as before.
+  startNewOwner(cx) {
+    this.ownerPick = null;
+    this.submit(cx, true);
+  }
+
+  submit(cx, fresh = false) {
     if (this.submitting || this.saving) return;
     const { state, doc } = this.spec;
     let out;
@@ -354,6 +401,16 @@ export default class Specd extends View {
       this.noteError = String(e.message);
       cx.notify();
       return;
+    }
+    if (!fresh) {
+      const owner = state.owners?.[state.phase];
+      const choices = ownerAlive(owner) ? [] : liveAgents(owner?.terminal);
+      if (needsOwnerPick({ alive: false, choices })) {
+        this.ownerPick = { choices, resume: true };
+        this.noteError = null;
+        cx.notify();
+        return;
+      }
     }
     this.submitting = true;
     this.saving = true; // the poll must not reload state.json under a half-finished Submit
@@ -834,7 +891,7 @@ export default class Specd extends View {
         comments: { sel: this.sel, changes: this.changes, input: this.input, editInput: this.editInput, editing: this.editing, error: this.noteError,
           onSelect: (i, s, cx) => this.onSelect(i, s, cx), onEdit: (i, cx) => this.edit(i, cx),
           onRemove: (i, cx) => this.remove(i, cx), submitting: this.submitting, onSubmit: (cx) => this.submit(cx),
-          approveBlock: approveBlock(this.spec.state), approving: this.approving, approveLabel: this.spec.state.phase === "plan" ? "Approve plan" : "Approve spec", onApprove: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? (cx) => this.approve(cx) : null,
+          owner: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? this.ownerProps() : null, approveBlock: approveBlock(this.spec.state), approving: this.approving, approveLabel: this.spec.state.phase === "plan" ? "Approve plan" : "Approve spec", onApprove: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? (cx) => this.approve(cx) : null,
           onSkip: this.spec.state.phase === "spec" ? (mode, cx) => this.skip(mode, cx) : null,
           planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? planNote(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
         diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
