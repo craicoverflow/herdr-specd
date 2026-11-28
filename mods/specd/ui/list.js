@@ -2,11 +2,12 @@
 import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { settings } from "herdr";
+import { gear } from "./settings.js";
 import { listFolds } from "../core/width.js";
 
 const cell = (t, w, s, color) => div().w(w).flex_none().text_size(13).text_color(color ?? t.foreground).child(String(s));
 
-export function list({ t, specs, errors, found = [], onFoundAdopt, onFoundDismiss, onOpen, onAdopt, onNew, layout = "wide", onViewSize }) {
+export function list({ t, specs, errors, found = [], onFoundAdopt, onFoundDismiss, onOpen, onAdopt, onNew, layout = "wide", onViewSize, onSettings }) {
   const folds = listFolds(layout);
   const head = h_flex().gap(12).px(12).py(6)
     .child(cell(t, 90, "ID", t.dim))
@@ -38,7 +39,8 @@ export function list({ t, specs, errors, found = [], onFoundAdopt, onFoundDismis
       .child(div().id("new-spec").px(10).py(4).rounded(6).border_1().border_color(t.input).text_size(13).cursor_pointer()
         .on_click((_e, cx) => onNew(cx)).child("New spec…"))
       .child(div().id("adopt-spec").px(10).py(4).rounded(6).border_1().border_color(t.input).text_size(13).cursor_pointer()
-        .on_click((_e, cx) => onAdopt(cx)).child("Adopt spec…")))
+        .on_click((_e, cx) => onAdopt(cx)).child("Adopt spec…"))
+      .child(gear(t, onSettings)))
     .child(specs.length ? (folds ? div() : head) : div().text_size(13).text_color(t.muted).child("No specs in this folder yet."))
     .children(rows)
     .children(found.length ? [div().pt(12).pb(4).px(12).text_size(12).text_color(t.dim).child("Found")] : [])

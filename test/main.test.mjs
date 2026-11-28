@@ -421,3 +421,31 @@ test("worker instructions: the user default applies, a folder \"\" turns it off"
     delete globalThis.localStorage;
   }
 });
+
+test("settings page: opens from the list and from a review, Save keeps the diagram settings, Back returns to where it came from", async () => {
+  const dir = folder("settings", { files: NATIVE });
+  await F.adoptFiles(dir, { id: "streaks", spec: `${dir}/SPEC.md`, plan: `${dir}/tasks/plan.md`, tasks: `${dir}/tasks/todo.md` });
+  const v = await open(dir, "streaks", noModel);
+  await settle();
+  await v.reload();
+  // from the review
+  assert.equal(v.selected, "streaks");
+  await step(v, () => v.openSettings(cx));
+  assert.equal(v.settingsPage, true);
+  v.mmdcInput.set_value("/opt/mmdc");
+  v.puppeteerInput.set_value("/opt/pp.json");
+  await step(v, () => v.saveDiagramSettings(cx));
+  assert.deepEqual([v.diagrams.settings.mmdc, v.diagrams.settings.puppeteer], ["/opt/mmdc", "/opt/pp.json"]);
+  await step(v, () => v.closeSettings(cx));
+  assert.equal(v.settingsPage, false);
+  assert.equal(v.selected, "streaks", "Back returns to the spec, not the list");
+  assert.ok(v.spec);
+  // from the list, via the dev command
+  await step(v, () => v.back());
+  assert.equal(v.selected, null);
+  await step(v, () => v.command("settings", cx));
+  assert.equal(v.settingsPage, true);
+  await step(v, () => v.closeSettings(cx));
+  assert.equal(v.selected, null);
+  assert.equal(v.settingsPage, false);
+});

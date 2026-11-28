@@ -4,7 +4,8 @@ import { settings } from "herdr";
 import { v_flex, h_flex, TextView } from "gpui-base";
 import { localRanges } from "../core/anchors.js";
 import { sidePanel } from "./side.js";
-import { diagram, settingsPopover } from "./diagram.js";
+import { diagram } from "./diagram.js";
+import { gear } from "./settings.js";
 import { reviewColumns } from "../core/width.js";
 
 // "#rgb" / "#rrggbb" -> "#rrggbb" + alpha byte.
@@ -52,7 +53,7 @@ function changedToggle({ t, changes, changedOnly, onToggleChanged }) {
     .on_click((_e, cx) => onToggleChanged(cx)).child(`Changed only · ${n}`);
 }
 
-export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comments, diagrams, changes, changedOnly, onToggleChanged, layout = "wide", onViewSize }) {
+export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comments, diagrams, changes, changedOnly, onToggleChanged, layout = "wide", onViewSize, onSettings }) {
   const s = spec.state;
   const narrow = layout === "narrow";
   const header = h_flex().gap(narrow ? 8 : 12).px(narrow ? 12 : 24).py(10).items_center().flex_wrap().border_b_1().border_color(t.border)
@@ -62,7 +63,7 @@ export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comm
     .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(`${s.phase} · ${s.status} · round ${s.round}`))
     .child(div().flex_1())
     .children([changedToggle({ t, changes, changedOnly, onToggleChanged })].filter(Boolean))
-    .child(settingsPopover({ t, ...diagrams.settings }));
+    .child(gear(t, onSettings));
   let body;
   if (error) body = div().p(24).text_color(t.blocked).child(error);
   else if (doc == null) body = div().p(24).text_color(t.muted).child(`The ${s.phase} document isn't there yet (${spec.path ?? "no path"}).`);
