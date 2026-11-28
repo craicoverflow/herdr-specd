@@ -50,6 +50,7 @@ export function settingsView({ t, mmdcInput, puppeteerInput, saved, onSave, onBa
     .child(v_flex().flex_1().min_h(0).min_w(0).overflow_y_scrollbar().p(narrow ? 12 : 24).gap(10)
       .child(div().text_size(13).font_semibold().child("Agents"))
       .child(div().text_size(12).text_color(t.muted).child("Instructions placed above the prompt of every agent specd starts. Saved as you type."))
+      .child(div().text_size(12).text_color(t.muted).whitespace_normal().child("Worker instructions lead each prompt. Coordinator instructions are sent once, right after a new coordinator starts, so they follow the first message that starts it. Editing them doesn't reach a coordinator that is already running, and they are only sent while the specd layout is shown."))
       .children(agents.map((a) => agentBlock(t, a, { onNone, onReset })))
       .child(div().text_size(13).font_semibold().mt(8).child("Diagrams"))
       .child(field(t, "mmdc path (empty: find it on PATH)", mmdcInput))
