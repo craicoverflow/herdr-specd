@@ -65,8 +65,15 @@ test("every content.mod exists in mods/ here or in the Herdr home", () => {
 test("sizes, sidebar and tabs match shepherdr.json when it exists", { skip: !existsSync(join(realHome, "layouts/shepherdr.json")) }, () => {
   const shep = JSON.parse(readFileSync(join(realHome, "layouts/shepherdr.json"), "utf8"));
   const sn = walk(shep);
+  // The live shepherdr.json carries run-time state: terminal ids, hidden flags, per-task terminal views.
+  const norm = (n) => {
+    const { hidden, ...rest } = n; // eslint-disable-line no-unused-vars
+    if (rest.content?.terminal) rest.content = { terminal: "*" };
+    if (rest.children) rest.children = rest.children.filter((c) => !/-browser-view$/.test(c.id)).map(norm);
+    return rest;
+  };
   for (const id of ["sidebar", "tabs", "files", "changes", "tasks", "main", "status"]) {
-    assert.deepEqual(byId(id), sn.find((n) => n.id === id), id);
+    assert.deepEqual(norm(byId(id)), norm(sn.find((n) => n.id === id)), id);
   }
   const { size, min, max } = sn.find((n) => n.id === "panel");
   assert.deepEqual({ size: byId("panel").size, min: byId("panel").min, max: byId("panel").max }, { size, min, max });
