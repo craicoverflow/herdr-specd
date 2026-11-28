@@ -26,6 +26,9 @@ note: not symlinked, because Herdr doesn't hot-reload a symlinked mod; re-run 'n
 The script copies only into `layouts/` and `mods/` of `~/.config/herdr-app` (or `$HERDR_APP_HOME`)
 and never touches Herdr's own layouts, mods or templates.
 
+Installing into a scratch home to try it out? Set `HERDR_APP_HOME` for `link.sh` only. `herdr-app do …`
+then needs a window running with that home, so for the live window leave it unset.
+
 Or ask your Herdr agent: *"add the mod at github.com/craicoverflow/herdr-specd"*; it follows
 [RECIPE.md](../../RECIPE.md) and does the same.
 
