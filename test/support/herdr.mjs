@@ -58,7 +58,17 @@ export const spaces = () => state.spaces ?? [{ id: "space-1", tabs: state.tabs }
 export const setSpaces = (v) => { state.spaces = v; };
 export const setFocused = (v) => { state.focused = v; };
 export const panes = () => state.panes;
-export async function hc(args) { journal.push({ type: "hc", args }); return { code: 0, stdout: "", stderr: "" }; }
+// Live terminals as `herdr.terminals()` lists them; tests set them, `hc label` on one is kept.
+export const terminals = () => state.terminals ?? [];
+export const setTerminals = (v) => { state.terminals = v; };
+export async function hc(args) {
+  journal.push({ type: "hc", args });
+  if (args[0] === "label") {
+    const k = (state.terminals ?? []).find((t) => t.address === args[1]);
+    if (k) for (const kv of args.slice(2)) { const i = kv.indexOf("="); k.labels = { ...k.labels, [kv.slice(0, i)]: kv.slice(i + 1) }; }
+  }
+  return { code: 0, stdout: "", stderr: "" };
+}
 export const settings = () => ({});
 export const theme = () => ({});
 let currentProps = {};

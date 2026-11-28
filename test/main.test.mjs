@@ -540,3 +540,22 @@ test("agents settings: a failed save keeps the typed text and says so", async ()
     delete globalThis.localStorage;
   }
 });
+
+test("the panel copy gives a new coordinator its instructions once (specd.instructed), and sends nothing without any", async () => {
+  const dir = folder("coord1");
+  const v = await open(dir, null, noModel);
+  const sends = () => journal.filter((e) => e.type === "hc" && e.args[0] === "send").length;
+  const before = sends();
+  H.setTerminals([{ address: "coord-t", state: "live", labels: { "herdr.role": "coordinator" }, cwd: dir }]);
+  assert.equal(await v.instructCoordinators(), 0, "no instructions: nothing sent");
+  globalThis.localStorage = { getItem: () => JSON.stringify({ coordinator: "Say PINEAPPLE." }), setItem() {} };
+  try {
+    assert.equal(await v.instructCoordinators(), 1);
+    assert.equal(await v.instructCoordinators(), 0, "labelled: not again");
+    assert.equal(sends() - before, 1);
+    assert.equal(H.terminals()[0].labels["specd.instructed"], "1");
+  } finally {
+    delete globalThis.localStorage;
+    H.setTerminals([]);
+  }
+});
