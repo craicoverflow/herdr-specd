@@ -7,7 +7,7 @@ import { pieces } from "./core/pieces.js";
 import { placeFor, isTabCopy, commandOf, requestFor, takeRequest, tabHost, folderFor } from "./core/place.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
-import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, folderConfigText, saveFolderInstructions, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
+import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, folderConfigText, saveFolderInstructions, ownerAlive, liveAgents, startAgent, sendMessage, instructCoordinators } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
 import { claimOwner, needsOwnerPick } from "./core/owner.js";
@@ -125,6 +125,7 @@ export default class Specd extends View {
       const poll = (cx) => cx.spawn(async (cx) => {
         const moved = this.syncFolder(cx);
         if ((await this.pollRequest(cx)) || moved) cx.notify();
+        await this.instructCoordinators();
       });
       poll(cx);
       cx.timer.every(POLL_MS, poll);
@@ -208,6 +209,20 @@ export default class Specd extends View {
       const tab = tabHost(panes(), focused()?.tab);
       if (tab) run("tab.close", { id: tab });
     });
+  }
+
+  // Panel copy: a coordinator that started since the last look gets the coordinator instructions
+  // (once: io/agents.js labels it). One look at a time; a failure waits for the next poll.
+  async instructCoordinators() {
+    if (this.instructing) return 0;
+    this.instructing = true;
+    try {
+      return await instructCoordinators();
+    } catch {
+      return 0;
+    } finally {
+      this.instructing = false;
+    }
   }
 
   // Panel copy: act on a fresh request from a tab copy. True when one was taken.

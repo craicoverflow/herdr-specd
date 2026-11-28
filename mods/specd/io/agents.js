@@ -1,8 +1,10 @@
 // Phase agents: start one in a tab, find its terminal, check an owner still exists, send to it.
 // Effects live here; the logic is in core/. Call from handlers and tasks, never from render().
 import { randomUUID } from "crypto";
-import { run, panes, spaces, hc, readTextFile, writeTextFile, appHome } from "herdr";
-import { withFolderInstructions } from "../core/agents.js";
+import { run, panes, spaces, terminals, hc, readTextFile, writeTextFile, appHome } from "herdr";
+import { withFolderInstructions, resolveInstructions, folderInstructions } from "../core/agents.js";
+import { pending, INSTRUCTED } from "../core/coordinator.js";
+import { userInstructions } from "./settings.js";
 import { loadAdapter, resolveModels, agentArgv } from "../core/adapters.js";
 import { findNewTerminal } from "../core/submit.js";
 import { agentChoices } from "../core/owner.js";
@@ -91,4 +93,38 @@ export async function startAgent(cx, { folder, adapter, model, name, message }) 
 export async function sendMessage(terminal, text) {
   const r = await hc(["send", terminal, text]);
   if (r.code !== 0) throw new Error(`Couldn't send to ${terminal}: ${(r.stderr || r.stdout).trim() || `hc exited ${r.code}`}`);
+}
+
+// Terminals told this session. The label is the lasting record; this covers the moment between
+// the send and the label, and a label that failed, so one coordinator is never told twice.
+const told = new Set();
+export const forgetInstructed = () => told.clear();
+
+/**
+ * Give every live coordinator that hasn't had them the coordinator instructions that apply to its
+ * folder (the folder's override, else the user's default), then label it `specd.instructed` so it is
+ * told once: an edit doesn't resend, a restarted coordinator (a new terminal) is told again. No
+ * instructions: no hc call. A failed send is tried again on the next call. Resolves to how many were sent.
+ */
+export async function instructCoordinators(send = sendMessage) {
+  const all = terminals().filter((k) => !told.has(k.address));
+  const waiting = pending(all, () => "-");
+  if (!waiting.length) return 0;
+  const configs = new Map();
+  for (const { folder } of waiting) if (folder && !configs.has(folder)) configs.set(folder, await folderConfig(folder));
+  const user = userInstructions("coordinator");
+  const todo = pending(all, (folder) => resolveInstructions({ user, folder: folderInstructions(configs.get(folder), "coordinator") }).text);
+  let n = 0;
+  for (const { address, text } of todo) {
+    if (told.has(address)) continue;
+    try {
+      await send(address, text);
+    } catch {
+      continue;
+    }
+    told.add(address);
+    n += 1;
+    await hc(["label", address, `${INSTRUCTED}=1`]);
+  }
+  return n;
 }
