@@ -201,6 +201,7 @@ export default class Specd extends View {
     const r = takeRequest(shared("specd.request"), this.lastReq, Date.now());
     if (!r) return false;
     this.lastReq = r.at;
+    this.settingsPage = false;
     this.creating = null;
     this.adopting = null;
     this.newError = null;

@@ -225,6 +225,18 @@ test("a New spec request opens over an open spec; an Open request returns to the
   assert.equal(panel.selected, null);
 });
 
+test("a palette request closes the settings page instead of hiding behind it", async () => {
+  reset("specd");
+  const dir = folder("place-settings", { files: TICKET });
+  await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+  const panel = await open(dir, "PROJ-123", noModel);
+  panel.openSettings(cx);
+  await paletteTab("specd: New spec");
+  await panel.pollRequest(cx);
+  assert.equal(panel.settingsPage, false);
+  assert.ok(panel.creating);
+});
+
 test("an old request is not acted on when the panel copy starts", () => {
   reset("specd");
   H.setShared("specd.request", { cmd: "new", props: { new: true }, at: Date.now() - 11000 });
