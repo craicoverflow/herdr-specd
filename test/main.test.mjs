@@ -14,7 +14,7 @@ const F = await import("../mods/specd/io/files.js");
 const { journal } = await import("./support/herdr.mjs");
 
 let pending = [];
-const cx = { notify() {}, spawn(fn) { if (!/nextCommand/.test(fn)) pending.push(fn(cx)); } /* the dev command loop parks for good */, timer: { every() {} }, sleep: () => Promise.resolve(), write_to_clipboard() {} };
+const cx = { notify() {}, spawn(fn) { if (!/nextCommand/.test(fn)) pending.push(fn(cx)); } /* the dev command loop parks for good */, timer: { every() {}, after() {} }, sleep: () => Promise.resolve(), write_to_clipboard() {} };
 const settle = async () => { while (pending.length) { const p = pending; pending = []; await Promise.all(p); } };
 
 async function open(dir, id, llm) {
@@ -463,4 +463,80 @@ test("settings page: opens from the list and from a review, Save keeps the diagr
   await step(v, () => v.closeSettings(cx));
   assert.equal(v.selected, null);
   assert.equal(v.settingsPage, false);
+});
+
+test("agents settings: user default and folder override save, merge, reset and reach the dispatch preview", async () => {
+  const store = {};
+  globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, x) => { store[k] = x; } };
+  try {
+    const dir = folder("agents-set", { files: TICKET });
+    fs.mkdirSync(`${dir}/.specd`, { recursive: true });
+    const cfgPath = `${dir}/.specd/config.json`;
+    fs.writeFileSync(cfgPath, JSON.stringify({ models: { worker: "opus" } }));
+    await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+    const v = await open(dir, "PROJ-123", noModel);
+    await settle(); await v.reload();
+    await step(v, () => v.openSettings(cx));
+    const { user, folder: fol } = v.agentInputs.worker;
+    // user default -> localStorage
+    user.set_value("Be kind.");
+    await step(v, () => { pending.push(v.saveAgent("worker", "user", cx)); });
+    assert.deepEqual(JSON.parse(store["specd.instructions"]), { worker: "Be kind." });
+    assert.equal(v.agentApplies("worker"), "Worker instructions: your default (8 chars)");
+    // folder override merges into the config; models survive
+    fol.set_value("Folder rules.");
+    await step(v, () => { pending.push(v.saveAgent("worker", "folder", cx)); });
+    assert.deepEqual(JSON.parse(fs.readFileSync(cfgPath, "utf8")), { models: { worker: "opus" }, instructions: { worker: "Folder rules." } });
+    assert.equal(v.agentStatus.worker.error, null);
+    assert.equal(v.agentApplies("worker"), "Worker instructions: from this folder (13 chars)");
+    await step(v, () => v.skip("single", cx));
+    assert.deepEqual([v.dispatching.instructions.from, v.dispatching.rows[0].promptText.startsWith("Folder rules.")], ["folder", true]);
+    // "none for this folder" writes "", which beats the default
+    await step(v, () => { pending.push(v.noneForFolder("worker", cx)); });
+    assert.equal(JSON.parse(fs.readFileSync(cfgPath, "utf8")).instructions.worker, "");
+    assert.equal(v.agentApplies("worker"), "Worker instructions: none");
+    // Reset removes only the key; the default applies again
+    await step(v, () => { pending.push(v.resetFolder("worker", cx)); });
+    assert.deepEqual(JSON.parse(fs.readFileSync(cfgPath, "utf8")), { models: { worker: "opus" } });
+    assert.equal(fol.value(), "");
+    assert.equal(v.agentApplies("worker"), "Worker instructions: your default (8 chars)");
+    // a file changed on disk since the page read it is refused, and the typed text stays
+    fs.writeFileSync(cfgPath, JSON.stringify({ models: { worker: "sonnet" } }));
+    fol.set_value("Mine.");
+    await step(v, () => { pending.push(v.saveAgent("worker", "folder", cx)); });
+    assert.match(v.agentStatus.worker.error, /changed on disk/);
+    assert.equal(fol.value(), "Mine.");
+    assert.deepEqual(JSON.parse(fs.readFileSync(cfgPath, "utf8")), { models: { worker: "sonnet" } });
+    // reopening reads the file again, then saving works
+    await step(v, () => v.openSettings(cx));
+    fol.set_value("Mine.");
+    await step(v, () => { pending.push(v.saveAgent("worker", "folder", cx)); });
+    assert.deepEqual(JSON.parse(fs.readFileSync(cfgPath, "utf8")), { models: { worker: "sonnet" }, instructions: { worker: "Mine." } });
+    assert.equal(v.agentStatus.worker.error, null);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("agents settings: a failed save keeps the typed text and says so", async () => {
+  globalThis.localStorage = { getItem: () => null, setItem() { throw new Error("storage full"); } };
+  try {
+    const dir = folder("agents-fail", { files: TICKET });
+    await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+    const v = await open(dir, "PROJ-123", noModel);
+    await step(v, () => v.openSettings(cx));
+    v.agentInputs.coordinator.user.set_value("keep me");
+    await step(v, () => { pending.push(v.saveAgent("coordinator", "user", cx)); });
+    assert.match(v.agentStatus.coordinator.error, /storage full/);
+    assert.equal(v.agentInputs.coordinator.user.value(), "keep me");
+    fs.mkdirSync(`${dir}/.specd`, { recursive: true });
+    fs.writeFileSync(`${dir}/.specd/config.json`, "{broken");
+    await step(v, () => v.openSettings(cx));
+    v.agentInputs.coordinator.folder.set_value("x");
+    await step(v, () => { pending.push(v.saveAgent("coordinator", "folder", cx)); });
+    assert.match(v.agentStatus.coordinator.error, /not valid JSON/);
+    assert.equal(fs.readFileSync(`${dir}/.specd/config.json`, "utf8"), "{broken");
+  } finally {
+    delete globalThis.localStorage;
+  }
 });

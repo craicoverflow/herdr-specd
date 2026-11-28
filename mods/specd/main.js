@@ -7,7 +7,7 @@ import { pieces } from "./core/pieces.js";
 import { placeFor, isTabCopy, commandOf, requestFor, takeRequest, tabHost, folderFor } from "./core/place.js";
 import { roundChanges } from "./core/rounds.js";
 import { loadSpecs, loadSpec, saveState, createState, usedIds, lastRound, specsDir, adoptFiles, saveRound, scanFound, dismissFound, adoptFound, relocatePlan, plansNaming } from "./io/files.js";
-import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
+import { adapterFor, defaultAdapter, loadAdapterById, folderConfig, folderConfigText, saveFolderInstructions, ownerAlive, liveAgents, startAgent, sendMessage } from "./io/agents.js";
 import { reviewText } from "./core/review.js";
 import { firstMessage } from "./core/submit.js";
 import { claimOwner, needsOwnerPick } from "./core/owner.js";
@@ -29,8 +29,8 @@ import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { settingsView } from "./ui/settings.js";
 import { dispatchView } from "./ui/dispatch.js";
-import { resolveInstructions, folderInstructions } from "./core/agents.js";
-import { userInstructions } from "./io/settings.js";
+import { resolveInstructions, folderInstructions, parseUserInstructions, appliesNote } from "./core/agents.js";
+import { userInstructions, saveUserInstructions, INSTRUCTIONS_KEY } from "./io/settings.js";
 import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
 import { addTask, startTask, writePromptFile, parentMode, listTasks, workerModel } from "./io/herdr-task.js";
 import { buildView } from "./ui/build.js";
@@ -86,6 +86,20 @@ export default class Specd extends View {
     this.mmdcInput.set_value(this.diagrams.settings.mmdc);
     this.puppeteerInput = InputState.new({ placeholder: "/path/to/puppeteer.json" });
     this.puppeteerInput.set_value(this.diagrams.settings.puppeteer);
+    // Agents section: a user-default and a folder-override editor per role, saved shortly after typing stops.
+    this.agentInputs = {};
+    this.agentStatus = {};
+    this.agentTimers = {};
+    this.agentCfg = undefined; // the folder's config.json text as this page last read or wrote it
+    for (const role of ["coordinator", "worker"]) {
+      this.agentStatus[role] = { error: null, saved: false };
+      this.agentInputs[role] = {
+        user: InputState.new({ placeholder: "Used for every folder", multi_line: true }),
+        folder: InputState.new({ placeholder: "Only for this folder", multi_line: true }),
+      };
+      for (const scope of ["user", "folder"]) this.agentInputs[role][scope].on("change", (_e, cx) => this.agentTyped(role, scope, cx));
+    }
+    this.agentLoading = false;
     this.input = InputState.new({ placeholder: "Comment on the selection" });
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.editInput = InputState.new({ placeholder: "Edit the comment" });
@@ -239,7 +253,93 @@ export default class Specd extends View {
     this.settingsSaved = false;
     this.mmdcInput.set_value(this.diagrams.settings.mmdc);
     this.puppeteerInput.set_value(this.diagrams.settings.puppeteer);
+    this.loadAgents(cx);
     cx.notify();
+  }
+
+  // Fill the Agents editors from storage and the folder's config.json. Setting a value fires
+  // "change", so agentLoading keeps that from being taken as typing.
+  loadAgents(cx) {
+    cx.spawn(async (cx) => {
+      this.agentLoading = true;
+      try {
+        let text = null;
+        try { text = this.folder ? await folderConfigText(this.folder) : null; } catch { /* unreadable: treated as none */ }
+        let config = null;
+        try { config = JSON.parse(text); } catch { /* none or broken */ }
+        this.agentCfg = text;
+        let stored = null;
+        try { stored = localStorage.getItem(INSTRUCTIONS_KEY); } catch { /* storage unavailable */ }
+        for (const role of Object.keys(this.agentInputs)) {
+          this.agentInputs[role].user.set_value(parseUserInstructions(stored, role) ?? "");
+          this.agentInputs[role].folder.set_value(folderInstructions(config, role) ?? "");
+          this.agentStatus[role] = { error: null, saved: false };
+        }
+      } finally {
+        this.agentLoading = false;
+      }
+      cx.notify();
+    });
+  }
+
+  // Typing in an Agents editor: save 600ms after it stops.
+  agentTyped(role, scope, cx) {
+    if (this.agentLoading) return;
+    const key = `${role}:${scope}`;
+    this.agentTimers[key]?.cancel?.();
+    this.agentStatus[role].saved = false;
+    this.agentTimers[key] = cx.timer?.after?.(600, (cx) => this.saveAgent(role, scope, cx));
+  }
+
+  // Keep one editor's text: the user default in localStorage, the folder override in config.json
+  // (emptied by typing = the key goes, like Reset). A failure leaves the typed text and says why.
+  async saveAgent(role, scope, cx) {
+    const status = this.agentStatus[role];
+    const text = this.agentInputs[role][scope].value();
+    try {
+      if (scope === "user") saveUserInstructions(role, text);
+      else if (!this.folder) throw new Error("no folder is open.");
+      else this.agentCfg = await saveFolderInstructions(this.folder, role, text === "" ? undefined : text, this.agentCfg);
+      status.error = null;
+      status.saved = true;
+    } catch (e) {
+      status.error = `Not saved: ${e?.message ?? e}`;
+      status.saved = false;
+    }
+    cx.notify();
+  }
+
+  // Write "" for this folder: no instructions here, whatever the default says.
+  async noneForFolder(role, cx) {
+    await this.setFolderKey(role, "", cx);
+  }
+
+  // Remove this folder's key so the default applies again.
+  async resetFolder(role, cx) {
+    await this.setFolderKey(role, undefined, cx);
+  }
+
+  async setFolderKey(role, value, cx) {
+    const status = this.agentStatus[role];
+    try {
+      if (!this.folder) throw new Error("no folder is open.");
+      this.agentCfg = await saveFolderInstructions(this.folder, role, value, this.agentCfg);
+      this.agentLoading = true;
+      try { this.agentInputs[role].folder.set_value(""); } finally { this.agentLoading = false; }
+      status.error = null;
+      status.saved = true;
+    } catch (e) {
+      status.error = `Not saved: ${e?.message ?? e}`;
+      status.saved = false;
+    }
+    cx.notify();
+  }
+
+  // What applies here for a role, from what is saved now (config text as this page holds it).
+  agentApplies(role) {
+    let config = null;
+    try { config = JSON.parse(this.agentCfg); } catch { /* none */ }
+    return appliesNote(role, resolveInstructions({ user: userInstructions(role), folder: folderInstructions(config, role) }));
   }
 
   closeSettings(cx) {
@@ -993,6 +1093,8 @@ export default class Specd extends View {
     if (this.settingsPage) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         settingsView({ t, mmdcInput: this.mmdcInput, puppeteerInput: this.puppeteerInput, saved: this.settingsSaved,
+          agents: ["coordinator", "worker"].map((role) => ({ role, ...this.agentInputs[role], ...this.agentStatus[role], applies: this.agentApplies(role) })),
+          onNone: (role, cx) => this.noneForFolder(role, cx), onReset: (role, cx) => this.resetFolder(role, cx),
           onSave: (cx) => this.saveDiagramSettings(cx), onBack: (cx) => this.closeSettings(cx), ...this.fit() }));
     }
     if (this.creating) {

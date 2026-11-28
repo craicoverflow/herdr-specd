@@ -1,5 +1,5 @@
-// The person's own settings for specd, kept in localStorage (the editing UI comes later).
-import { parseUserInstructions } from "../core/agents.js";
+// The person's own settings for specd, kept in localStorage (edited on the settings page).
+import { parseUserInstructions, withUserInstructions } from "../core/agents.js";
 
 export const INSTRUCTIONS_KEY = "specd.instructions";
 
@@ -10,4 +10,9 @@ export function userInstructions(role) {
   } catch {
     return undefined; // storage can be unavailable
   }
+}
+
+/** Keep the user's default for a role. Throws when storage refuses, so the page can say so. */
+export function saveUserInstructions(role, text) {
+  localStorage.setItem(INSTRUCTIONS_KEY, withUserInstructions(localStorage.getItem(INSTRUCTIONS_KEY), role, text));
 }

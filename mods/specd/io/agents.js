@@ -1,7 +1,8 @@
 // Phase agents: start one in a tab, find its terminal, check an owner still exists, send to it.
 // Effects live here; the logic is in core/. Call from handlers and tasks, never from render().
 import { randomUUID } from "crypto";
-import { run, panes, spaces, hc, readTextFile, appHome } from "herdr";
+import { run, panes, spaces, hc, readTextFile, writeTextFile, appHome } from "herdr";
+import { withFolderInstructions } from "../core/agents.js";
 import { loadAdapter, resolveModels, agentArgv } from "../core/adapters.js";
 import { findNewTerminal } from "../core/submit.js";
 import { agentChoices } from "../core/owner.js";
@@ -35,6 +36,25 @@ export async function loadAdapterById(id) {
 
 /** The folder's .specd/config.json, or null. */
 export const folderConfig = (folder) => readJson(`${folder}/.specd/config.json`);
+
+/** The folder's .specd/config.json as text, or null when there is none. */
+export async function folderConfigText(folder) {
+  return (await readTextFile(`${folder}/.specd/config.json`)) ?? null;
+}
+
+/**
+ * Set (a string) or remove (undefined) one role's instructions in the folder's config.json, keeping
+ * every other key. `expected` is the text the page last read (null: no file); when the file has
+ * changed since, nothing is written. Resolves to the text now on disk.
+ */
+export async function saveFolderInstructions(folder, role, value, expected) {
+  const path = `${folder}/.specd/config.json`;
+  const current = await folderConfigText(folder);
+  if (expected !== undefined && expected !== current) throw new Error(".specd/config.json changed on disk since this page read it. Close and reopen Settings to see the new text.");
+  const next = withFolderInstructions(current, role, value);
+  await writeTextFile(path, next, current);
+  return next;
+}
 
 /** The adapter new specs use (S11 scans with its patterns before any spec record exists). */
 export async function defaultAdapter() {

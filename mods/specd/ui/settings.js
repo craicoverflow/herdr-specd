@@ -8,13 +8,39 @@ const field = (t, label, state) =>
     .child(div().text_size(12).text_color(t.muted).child(label))
     .child(div().w_full().min_w(0).rounded(6).border_1().border_color(t.input).bg(t.background).child(Input.new(state)));
 
+const ROLE_TITLES = { coordinator: "Coordinator", worker: "Worker" };
+
+const link = (t, id, label, on) =>
+  div().id(id).text_size(12).text_color(t.muted).cursor_pointer().hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => on(cx)).child(label);
+
+// A multi-line editor that fills the panel width (min_w(0) lets it shrink to 280px).
+const area = (t, state) =>
+  div().w_full().min_w(0).h(96).rounded(6).border_1().border_color(t.input).bg(t.background).child(Input.new(state));
+
+/** Agents: one block per role with what applies, the user default and this folder's override. */
+function agentBlock(t, a, { onNone, onReset }) {
+  const title = ROLE_TITLES[a.role] ?? a.role;
+  return v_flex().id(`agents-${a.role}`).gap(6).min_w(0)
+    .child(div().text_size(13).font_semibold().child(`${title} instructions`))
+    .child(div().text_size(12).text_color(t.muted).child(`Applies here: ${a.applies.replace(/^[^:]*: /, "")}`))
+    .child(div().text_size(12).text_color(t.muted).child("Your default (every folder)"))
+    .child(area(t, a.user))
+    .child(div().text_size(12).text_color(t.muted).child("This folder (wins over your default)"))
+    .child(area(t, a.folder))
+    .child(h_flex().gap(12).items_center().flex_wrap()
+      .child(link(t, `agents-${a.role}-none`, "None for this folder", (cx) => onNone(a.role, cx)))
+      .child(link(t, `agents-${a.role}-reset`, "Reset", (cx) => onReset(a.role, cx)))
+      .children(a.saved && !a.error ? [div().text_size(12).text_color(t.muted).child("Saved")] : []))
+    .children(a.error ? [div().w_full().min_w(0).text_size(12).text_color(t.blocked).whitespace_normal().child(a.error)] : []);
+}
+
 /** The gear that opens the page; sits in the list and review headers. */
 export const gear = (t, onOpen) =>
   div().id("open-settings").text_size(13).text_color(t.muted).cursor_pointer()
     .hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => onOpen(cx)).child("⚙ Settings");
 
 /** Diagrams: the mmdc path and puppeteer config, kept in localStorage by Diagrams. */
-export function settingsView({ t, mmdcInput, puppeteerInput, saved, onSave, onBack, layout = "wide", onViewSize }) {
+export function settingsView({ t, mmdcInput, puppeteerInput, saved, onSave, onBack, layout = "wide", onViewSize, agents = [], onNone, onReset }) {
   const narrow = layout === "narrow";
   const root = v_flex().id("settings-page").size_full().min_w(0).bg(t.background).text_color(t.foreground)
     .child(h_flex().gap(narrow ? 8 : 12).px(narrow ? 12 : 24).py(10).items_center().border_b_1().border_color(t.border)
@@ -22,7 +48,10 @@ export function settingsView({ t, mmdcInput, puppeteerInput, saved, onSave, onBa
         .hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => onBack(cx)).child("‹ Back"))
       .child(div().text_size(14).font_semibold().child("Settings")))
     .child(v_flex().flex_1().min_h(0).min_w(0).overflow_y_scrollbar().p(narrow ? 12 : 24).gap(10)
-      .child(div().text_size(13).font_semibold().child("Diagrams"))
+      .child(div().text_size(13).font_semibold().child("Agents"))
+      .child(div().text_size(12).text_color(t.muted).child("Instructions placed above the prompt of every agent specd starts. Saved as you type."))
+      .children(agents.map((a) => agentBlock(t, a, { onNone, onReset })))
+      .child(div().text_size(13).font_semibold().mt(8).child("Diagrams"))
       .child(field(t, "mmdc path (empty: find it on PATH)", mmdcInput))
       .child(field(t, "Puppeteer config file (empty: none)", puppeteerInput))
       .child(h_flex().gap(8).items_center().flex_wrap()
