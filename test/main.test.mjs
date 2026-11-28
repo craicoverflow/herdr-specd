@@ -225,6 +225,18 @@ test("a New spec request opens over an open spec; an Open request returns to the
   assert.equal(panel.selected, null);
 });
 
+test("a palette request closes the settings page instead of hiding behind it", async () => {
+  reset("specd");
+  const dir = folder("place-settings", { files: TICKET });
+  await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+  const panel = await open(dir, "PROJ-123", noModel);
+  panel.openSettings(cx);
+  await paletteTab("specd: New spec");
+  await panel.pollRequest(cx);
+  assert.equal(panel.settingsPage, false);
+  assert.ok(panel.creating);
+});
+
 test("an old request is not acted on when the panel copy starts", () => {
   reset("specd");
   H.setShared("specd.request", { cmd: "new", props: { new: true }, at: Date.now() - 11000 });
@@ -382,6 +394,9 @@ test("every view renders at 280, 510 and 900px without throwing", async () => {
   v.creating = null;
   await step(v, () => v.startAdopt(cx));
   for (const w of widths) { v.viewW = w; at("adopt form", w); }
+  v.adopting = null;
+  await step(v, () => v.openSettings(cx));
+  for (const w of widths) { v.viewW = w; at("settings page", w); }
 });
 
 test("worker instructions: the folder's override leads each prompt file; changing them before Confirm refuses once", async () => {
@@ -420,4 +435,32 @@ test("worker instructions: the user default applies, a folder \"\" turns it off"
   } finally {
     delete globalThis.localStorage;
   }
+});
+
+test("settings page: opens from the list and from a review, Save keeps the diagram settings, Back returns to where it came from", async () => {
+  const dir = folder("settings", { files: NATIVE });
+  await F.adoptFiles(dir, { id: "streaks", spec: `${dir}/SPEC.md`, plan: `${dir}/tasks/plan.md`, tasks: `${dir}/tasks/todo.md` });
+  const v = await open(dir, "streaks", noModel);
+  await settle();
+  await v.reload();
+  // from the review
+  assert.equal(v.selected, "streaks");
+  await step(v, () => v.openSettings(cx));
+  assert.equal(v.settingsPage, true);
+  v.mmdcInput.set_value("/opt/mmdc");
+  v.puppeteerInput.set_value("/opt/pp.json");
+  await step(v, () => v.saveDiagramSettings(cx));
+  assert.deepEqual([v.diagrams.settings.mmdc, v.diagrams.settings.puppeteer], ["/opt/mmdc", "/opt/pp.json"]);
+  await step(v, () => v.closeSettings(cx));
+  assert.equal(v.settingsPage, false);
+  assert.equal(v.selected, "streaks", "Back returns to the spec, not the list");
+  assert.ok(v.spec);
+  // from the list, via the dev command
+  await step(v, () => v.back());
+  assert.equal(v.selected, null);
+  await step(v, () => v.command("settings", cx));
+  assert.equal(v.settingsPage, true);
+  await step(v, () => v.closeSettings(cx));
+  assert.equal(v.selected, null);
+  assert.equal(v.settingsPage, false);
 });

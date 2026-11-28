@@ -27,6 +27,7 @@ import { documentView } from "./ui/document.js";
 import { layoutFor } from "./core/width.js";
 import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
+import { settingsView } from "./ui/settings.js";
 import { dispatchView } from "./ui/dispatch.js";
 import { resolveInstructions, folderInstructions } from "./core/agents.js";
 import { userInstructions } from "./io/settings.js";
@@ -79,7 +80,8 @@ export default class Specd extends View {
     this.diagrams = new Diagrams();
     this.docW = 800;
     this.viewW = 900;
-    this.settingsOpen = false;
+    this.settingsPage = false; // the settings page is showing; Back returns to whatever was under it
+    this.settingsSaved = false;
     this.mmdcInput = InputState.new({ placeholder: "mmdc" });
     this.mmdcInput.set_value(this.diagrams.settings.mmdc);
     this.puppeteerInput = InputState.new({ placeholder: "/path/to/puppeteer.json" });
@@ -199,6 +201,7 @@ export default class Specd extends View {
     const r = takeRequest(shared("specd.request"), this.lastReq, Date.now());
     if (!r) return false;
     this.lastReq = r.at;
+    this.settingsPage = false;
     this.creating = null;
     this.adopting = null;
     this.newError = null;
@@ -226,8 +229,21 @@ export default class Specd extends View {
 
   saveDiagramSettings(cx) {
     this.diagrams.update({ mmdc: this.mmdcInput.value(), puppeteer: this.puppeteerInput.value() });
-    this.settingsOpen = false;
+    this.settingsSaved = true;
     this.renderDiagrams(cx);
+    cx.notify();
+  }
+
+  openSettings(cx) {
+    this.settingsPage = true;
+    this.settingsSaved = false;
+    this.mmdcInput.set_value(this.diagrams.settings.mmdc);
+    this.puppeteerInput.set_value(this.diagrams.settings.puppeteer);
+    cx.notify();
+  }
+
+  closeSettings(cx) {
+    this.settingsPage = false;
     cx.notify();
   }
 
@@ -959,7 +975,8 @@ export default class Specd extends View {
     else if (c === "new") {
       this.creating = { adapter: "agent-skills", folder: this.folder };
       await this.fillModels();
-    } else if (c === "adopt") {
+    } else if (c === "settings") this.openSettings(cx);
+    else if (c === "adopt") {
       this.adopting = { spec: null, plan: null, tasks: null };
       this.adoptInput.set_value("");
     }
@@ -973,6 +990,11 @@ export default class Specd extends View {
     if (this.handedOff) return div().size_full().p(16).bg(t.background).text_color(t.muted ?? t.foreground).child("specd opens in the panel");
     if (this.zoom) return zoomView({ t, pic: this.zoom, onClose: () => closeOverlay(props().overlay) });
     if (!this.folder) return div().size_full().p(16).bg(t.background).text_color(t.foreground).child("No folder: focus a terminal first");
+    if (this.settingsPage) {
+      return div().size_full().bg(t.background).text_color(t.foreground).child(
+        settingsView({ t, mmdcInput: this.mmdcInput, puppeteerInput: this.puppeteerInput, saved: this.settingsSaved,
+          onSave: (cx) => this.saveDiagramSettings(cx), onBack: (cx) => this.closeSettings(cx), ...this.fit() }));
+    }
     if (this.creating) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         newView({ t, form: this.creating, inputs: this.newInputs, error: this.newError, busy: this.newBusy,
@@ -987,7 +1009,7 @@ export default class Specd extends View {
     }
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }), ...this.fit() }));
+        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onSettings: (cx) => this.openSettings(cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }), ...this.fit() }));
     }
     if (this.dispatching && this.spec) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
@@ -1016,8 +1038,8 @@ export default class Specd extends View {
         layout: layoutFor(this.viewW), onViewSize: (w, cx) => { if (Math.abs(w - this.viewW) > 2) { this.viewW = w; cx.notify(); } },
         diagrams: { store: this.diagrams, availW: this.docW - (layoutFor(this.viewW) === "narrow" ? 24 : 48), onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
-          settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },
-            mmdcInput: this.mmdcInput, puppeteerInput: this.puppeteerInput, onSave: (cx) => this.saveDiagramSettings(cx) } },
+        },
+        onSettings: (cx) => this.openSettings(cx),
         onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }) }));
   }
 }
