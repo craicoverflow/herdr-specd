@@ -382,6 +382,9 @@ test("every view renders at 280, 510 and 900px without throwing", async () => {
   v.creating = null;
   await step(v, () => v.startAdopt(cx));
   for (const w of widths) { v.viewW = w; at("adopt form", w); }
+  v.adopting = null;
+  await step(v, () => v.openSettings(cx));
+  for (const w of widths) { v.viewW = w; at("settings page", w); }
 });
 
 test("worker instructions: the folder's override leads each prompt file; changing them before Confirm refuses once", async () => {
