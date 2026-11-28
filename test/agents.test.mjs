@@ -33,3 +33,29 @@ test("parseUserInstructions and folderInstructions read what storage and config 
   assert.equal(folderInstructions({ instructions: { coordinator: "c" } }, "worker"), undefined);
   assert.equal(folderInstructions(null, "worker"), undefined);
 });
+
+import { withFolderInstructions, withUserInstructions } from "../mods/specd/core/agents.js";
+
+test("withFolderInstructions: merges into the config so models survive; \"\" is kept; undefined removes only the key", () => {
+  const cfg = JSON.stringify({ models: { worker: "opus" }, instructions: { worker: "w", coordinator: "c" } });
+  const set = JSON.parse(withFolderInstructions(cfg, "worker", "new"));
+  assert.deepEqual(set, { models: { worker: "opus" }, instructions: { worker: "new", coordinator: "c" } });
+  assert.equal(JSON.parse(withFolderInstructions(cfg, "worker", "")).instructions.worker, "");
+  const reset = JSON.parse(withFolderInstructions(cfg, "worker", undefined));
+  assert.deepEqual(reset, { models: { worker: "opus" }, instructions: { coordinator: "c" } });
+  const last = JSON.parse(withFolderInstructions(JSON.stringify({ models: {}, instructions: { worker: "w" } }), "worker", undefined));
+  assert.deepEqual(last, { models: {} }, "an emptied instructions object goes too");
+  assert.deepEqual(JSON.parse(withFolderInstructions(null, "worker", "x")), { instructions: { worker: "x" } });
+  assert.deepEqual(JSON.parse(withFolderInstructions(null, "worker", undefined)), {});
+});
+
+test("withFolderInstructions refuses a config that isn't a JSON object", () => {
+  assert.throws(() => withFolderInstructions("{nope", "worker", "x"), /not valid JSON/);
+  assert.throws(() => withFolderInstructions("[1]", "worker", "x"), /not valid JSON/);
+});
+
+test("withUserInstructions: keeps the other role, tolerates bad stored text", () => {
+  assert.deepEqual(JSON.parse(withUserInstructions('{"worker":"w"}', "coordinator", "c")), { worker: "w", coordinator: "c" });
+  assert.deepEqual(JSON.parse(withUserInstructions("garbage", "worker", "w")), { worker: "w" });
+  assert.deepEqual(JSON.parse(withUserInstructions(null, "worker", "w")), { worker: "w" });
+});
