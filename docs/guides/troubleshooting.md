@@ -68,8 +68,7 @@ board stays empty.
 **Why:** specd is a panel only while the `specd` layout is shown. In any other layout it opens a tab,
 as it always did.
 
-**Fix:** `herdr-app do layout.switch '{"name":"specd"}'`, then pick the specd panel (last icon of
-the panel icons, top right). Palette commands now focus the panel.
+**Fix:** `herdr-app do layout.switch '{"name":"specd"}'`, then pick specd from the panel icons (top right). Palette commands now focus the panel.
 
 **Expected:** **specd: Open** shows the Specs list in the panel and no tab appears.
 

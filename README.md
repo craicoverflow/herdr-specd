@@ -19,7 +19,7 @@ sh scripts/link.sh                                     # install the mod and the
 herdr-app do layout.switch '{"name":"specd"}'          # switch to the specd layout
 ```
 
-Then pick the specd panel (last icon at the top right) and click **New spec…** or **Adopt spec…**.
+Then pick specd from the panel icons at the top right and click **New spec…** or **Adopt spec…**.
 Step by step, with what you should see: [Install guide](docs/guides/install.md).
 
 ## The main flows

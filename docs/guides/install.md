@@ -35,7 +35,7 @@ Check the mod loaded:
 herdr-app check ~/.config/herdr-app/mods/specd
 ```
 
-**Expected:** `"errors": []` (or no errors listed). If not, see [Troubleshooting](troubleshooting.md).
+**Expected:** `check passed: …/mods/specd`. If not, see [Troubleshooting](troubleshooting.md).
 
 ## 2. Switch to the specd layout
 
@@ -44,8 +44,8 @@ herdr-app do layout.switch '{"name":"specd"}'
 ```
 
 **Expected:** the window changes at once. Your agent is on the left, in the Terminal view, and the
-right panel is a stack of panels. The panel opens on Tasks; pick the specd panel from the panel
-icons at the top right (the last one). It shows the **Specs** list.
+right panel is a stack of panels. The panel opens on Tasks; pick specd from the panel icons at
+the top right (it is the one added after Files, Changes and Tasks). It shows the **Specs** list.
 
 ![The specd layout: the agent on the left, a spec open in the right panel](../screenshots/layout-hero.png)
 
