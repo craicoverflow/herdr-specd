@@ -383,3 +383,41 @@ test("every view renders at 280, 510 and 900px without throwing", async () => {
   await step(v, () => v.startAdopt(cx));
   for (const w of widths) { v.viewW = w; at("adopt form", w); }
 });
+
+test("worker instructions: the folder's override leads each prompt file; changing them before Confirm refuses once", async () => {
+  const dir = folder("instr", { files: TICKET });
+  await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+  const v = await open(dir, "PROJ-123", noModel);
+  await settle(); await v.reload();
+  await step(v, () => v.skip("single", cx));
+  assert.deepEqual([v.dispatching.instructions.from, v.dispatching.rows[0].promptText.startsWith("Be brief")], ["none", false]);
+  fs.mkdirSync(`${dir}/.specd`, { recursive: true });
+  fs.writeFileSync(`${dir}/.specd/config.json`, JSON.stringify({ instructions: { worker: "Be brief." } }));
+  await step(v, () => v.confirmDispatch(cx));
+  assert.equal(tasks().length, 0, "refused once");
+  assert.equal(v.dispatching.changed, "Instructions changed. Check the list, then confirm again.");
+  assert.deepEqual([v.dispatching.instructions.from, v.dispatching.rows[0].promptText.startsWith("Be brief.\n\n---\n\n")], ["folder", true]);
+  await step(v, () => v.confirmDispatch(cx));
+  assert.ok(v.dispatching.finished, v.dispatching.error);
+  assert.ok(fs.readFileSync(tasks()[0].promptFile, "utf8").startsWith("Be brief.\n\n---\n\n"));
+});
+
+test("worker instructions: the user default applies, a folder \"\" turns it off", async () => {
+  globalThis.localStorage = { getItem: () => JSON.stringify({ worker: "My default." }), setItem() {} };
+  try {
+    const dir = folder("instr2", { files: TICKET });
+    await F.adoptFiles(dir, { id: "PROJ-123", spec: `${dir}/PROJ-123.md` });
+    const v = await open(dir, "PROJ-123", noModel);
+    await settle(); await v.reload();
+    await step(v, () => v.skip("single", cx));
+    assert.deepEqual([v.dispatching.instructions.from, v.dispatching.rows[0].promptText.startsWith("My default.")], ["user", true]);
+    v.render(cx);
+    fs.mkdirSync(`${dir}/.specd`, { recursive: true });
+    fs.writeFileSync(`${dir}/.specd/config.json`, JSON.stringify({ instructions: { worker: "" } }));
+    await step(v, () => v.confirmDispatch(cx));
+    assert.equal(v.dispatching.instructions.from, "none");
+    assert.ok(!v.dispatching.rows[0].promptText.startsWith("My default."));
+  } finally {
+    delete globalThis.localStorage;
+  }
+});

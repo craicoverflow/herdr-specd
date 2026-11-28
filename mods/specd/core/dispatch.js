@@ -4,6 +4,7 @@ import { orderItems, buildPrompt, addArgv, startArgv, planRetry } from "./tasks.
 import { resolveModels } from "./adapters.js";
 import { modelDefaults } from "./worker.js";
 import { validateTasks } from "./tasks.js";
+import { withInstructions } from "./agents.js";
 
 /** `repo` (relative to the spec folder, "." for the folder itself) as a normalised absolute path. */
 export function resolveRepo(folder, repo) {
@@ -22,7 +23,7 @@ const absolute = (folder, path) => (path.startsWith("/") ? path : resolveRepo(fo
  * One row per item in dependency order: what to create and the prompt it gets.
  * `folder` is the spec folder (the one holding .specd).
  */
-export function dispatchRows({ tasks, state, adapter, config, folder, planText, docs, workerModel }) {
+export function dispatchRows({ tasks, state, adapter, config, folder, planText, docs, workerModel, instructions = "" }) {
   const build = adapter.phases.build;
   const { model, effort } = resolveModels(adapter, config, state, modelDefaults(workerModel)).build;
   const specPath = absolute(folder, state.paths.spec);
@@ -36,7 +37,7 @@ export function dispatchRows({ tasks, state, adapter, config, folder, planText, 
     model,
     effort,
     promptFile: `${folder.replace(/\/$/, "")}/.specd/specs/${state.id}/prompts/${item.id}.md`,
-    promptText: buildPrompt(item, { adapter, specPath, planPath, planText, docs }),
+    promptText: withInstructions(buildPrompt(item, { adapter, specPath, planPath, planText, docs }), instructions),
   }));
 }
 
