@@ -194,3 +194,10 @@ test("approveBlock: a plan in review can be approved, a drafting one can't", () 
   assert.match(approveBlock({ ...plan, pending: [{}] }), /pending comment/);
   assert.match(approveBlock({ ...state, phase: "build" }), /already/);
 });
+
+test("dispatchRows: worker instructions go at the top of every prompt; none leaves prompts identical", () => {
+  const plain = dispatchRows(base);
+  assert.deepEqual(dispatchRows({ ...base, instructions: "" }).map((r) => r.promptText), plain.map((r) => r.promptText));
+  const rows = dispatchRows({ ...base, instructions: "Be brief." });
+  rows.forEach((r, i) => assert.equal(r.promptText, `Be brief.\n\n---\n\n${plain[i].promptText}`));
+});

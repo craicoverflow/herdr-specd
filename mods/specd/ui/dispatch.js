@@ -4,6 +4,7 @@ import { div } from "gpui-kit";
 import { settings } from "herdr";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { ownerBlock } from "./side.js";
+import { appliesNote } from "../core/agents.js";
 
 const btn = (t, id, label, onClick, primary, disabled) =>
   (disabled
@@ -94,6 +95,7 @@ export function dispatchView({ t, d, created, noteInput, onConfirm, onToggle, on
     .children(top)
     .child(div().text_size(13).text_color(t.muted).whitespace_normal().child(`${plural(d.rows.length, "item")} to create, in this order. Nothing runs until you confirm.`))
     .children(d.finished ? [] : [toggle(t, d.review, onToggle)])
+    .children(d.instructions ? [div().text_size(12).text_color(t.muted).whitespace_normal().child(appliesNote("worker", d.instructions))] : [])
     .child(body)
     .children(!d.finished && !started && !d.legacy && d.mode !== "single" ? [askAgain({ t, d, noteInput, onAskAgain, narrow })] : [])
     .children(status)

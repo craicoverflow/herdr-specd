@@ -28,6 +28,8 @@ import { layoutFor } from "./core/width.js";
 import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { dispatchView } from "./ui/dispatch.js";
+import { resolveInstructions, folderInstructions } from "./core/agents.js";
+import { userInstructions } from "./io/settings.js";
 import { dispatchRows, previewArgvs, runDispatch, dispatchSummary, errorsMessage } from "./core/dispatch.js";
 import { addTask, startTask, writePromptFile, parentMode, listTasks, workerModel } from "./io/herdr-task.js";
 import { buildView } from "./ui/build.js";
@@ -633,10 +635,16 @@ export default class Specd extends View {
     return mode === "plan" ? state : skipPlan(state, { asPlan: mode === "spec" });
   }
 
+  // The worker instructions that apply now: the folder's override, else the user's default.
+  workerInstructions(config) {
+    return resolveInstructions({ user: userInstructions("worker"), folder: folderInstructions(config, "worker") });
+  }
+
   async listRows(target, r) {
     const { adapter } = await adapterFor(this.folder, target);
     const config = await folderConfig(this.folder);
-    return { adapter, rows: dispatchRows({ tasks: { items: r.items }, state: target, adapter, config, folder: this.folder, planText: r.planText ?? "", docs: r.docs, workerModel: await workerModel() }) };
+    const instructions = this.workerInstructions(config);
+    return { adapter, instructions, rows: dispatchRows({ tasks: { items: r.items }, state: target, adapter, config, folder: this.folder, planText: r.planText ?? "", docs: r.docs, workerModel: await workerModel(), instructions: instructions.text }) };
   }
 
   // Preview: the list from manifest.json, worked out again (one model call) when there is none yet,
@@ -661,9 +669,9 @@ export default class Specd extends View {
         if (r.errors) {
           this.dispatching = { mode, errors: r.errors, warnings: r.warnings ?? [], legacy: Boolean(r.legacy) };
         } else {
-          const { adapter, rows } = await this.listRows(target, r);
+          const { adapter, rows, instructions } = await this.listRows(target, r);
           this.dispatching = {
-            mode, target, adapter, rows, errors: [], warnings: r.warnings ?? [], legacy: Boolean(r.legacy), changed: r.changed, done: r.done, review,
+            mode, target, adapter, rows, instructions, planned: r, errors: [], warnings: r.warnings ?? [], legacy: Boolean(r.legacy), changed: r.changed, done: r.done, review,
             parentMode: await parentMode(this.folder, state), summary: dispatchSummary(rows, state.dispatch ?? {}),
           };
           this.refreshPreviews();
@@ -686,18 +694,27 @@ export default class Specd extends View {
   // What is dispatched is the list on screen: when a document changed since it was made, the list is
   // worked out again and, if it differs, shown instead of dispatched. True when it is still good.
   async stillCurrent(d) {
-    if (d.legacy) return true;
-    d.checking = true;
-    const r = await loadPlanned(this.folder, d.target, { llm: this.llm });
-    d.checking = false;
-    if (r.errors) throw new Error(`Couldn't check the plan again: ${r.errors.join(" ")}`);
-    if (!r.derived) return true;
+    const now = this.workerInstructions(await folderConfig(this.folder));
+    const instructionsChanged = now.text !== d.instructions?.text || now.from !== d.instructions?.from;
+    let r = d.planned;
+    let derived = false;
+    if (!d.legacy) {
+      d.checking = true;
+      const fresh = await loadPlanned(this.folder, d.target, { llm: this.llm });
+      d.checking = false;
+      if (fresh.errors) throw new Error(`Couldn't check the plan again: ${fresh.errors.join(" ")}`);
+      if (fresh.derived) { r = fresh; derived = true; }
+    }
+    if (!derived && !instructionsChanged) return true;
     const before = d.rows.map((row) => row.item);
-    const { rows } = await this.listRows(d.target, r);
+    const { rows, instructions } = await this.listRows(d.target, r);
     d.rows = rows; // same work: the prompts carry the new text
-    d.done = r.done;
-    if (sameList(before, r.items)) return true;
-    d.changed = `${r.changed ?? "The documents changed, so the list was worked out again"}. Check it, then confirm again.`;
+    d.instructions = instructions;
+    d.planned = r;
+    if (derived) d.done = r.done;
+    if (!instructionsChanged && sameList(before, r.items)) return true;
+    d.changed = instructionsChanged ? "Instructions changed. Check the list, then confirm again."
+      : `${r.changed ?? "The documents changed, so the list was worked out again"}. Check it, then confirm again.`;
     d.summary = dispatchSummary(rows, this.spec.state.dispatch ?? {});
     return false;
   }
