@@ -11,7 +11,7 @@ const field = (t, label, state) =>
 const ROLE_TITLES = { coordinator: "Coordinator", worker: "Worker" };
 
 const link = (t, id, label, on) =>
-  div().id(id).text_size(12).text_color(t.muted).cursor_pointer().underline().hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => on(cx)).child(label);
+  div().id(id).text_size(12).text_color(t.muted).cursor_pointer().hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => on(cx)).child(label);
 
 // A multi-line editor that fills the panel width (min_w(0) lets it shrink to 280px).
 const area = (t, state) =>
@@ -31,7 +31,7 @@ function agentBlock(t, a, { onNone, onReset }) {
       .child(link(t, `agents-${a.role}-none`, "None for this folder", (cx) => onNone(a.role, cx)))
       .child(link(t, `agents-${a.role}-reset`, "Reset", (cx) => onReset(a.role, cx)))
       .children(a.saved && !a.error ? [div().text_size(12).text_color(t.muted).child("Saved")] : []))
-    .children(a.error ? [div().text_size(12).text_color(t.destructive ?? t.foreground).child(a.error)] : []);
+    .children(a.error ? [div().w_full().min_w(0).text_size(12).text_color(t.blocked).whitespace_normal().child(a.error)] : []);
 }
 
 /** The gear that opens the page; sits in the list and review headers. */
