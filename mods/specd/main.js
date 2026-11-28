@@ -24,6 +24,7 @@ import { lineStarts } from "./core/anchors.js";
 import { addComment, editComment, removeComment, pieceIndexAt, selectionAnchor } from "./core/comments.js";
 import { list } from "./ui/list.js";
 import { documentView } from "./ui/document.js";
+import { layoutFor } from "./core/width.js";
 import { Diagrams, isDark } from "./io/mermaid.js";
 import { zoomView } from "./ui/diagram.js";
 import { dispatchView } from "./ui/dispatch.js";
@@ -75,6 +76,7 @@ export default class Specd extends View {
     this.follow = place === "panel" && !isTabCopy(props());
     this.diagrams = new Diagrams();
     this.docW = 800;
+    this.viewW = 900;
     this.settingsOpen = false;
     this.mmdcInput = InputState.new({ placeholder: "mmdc" });
     this.mmdcInput.set_value(this.diagrams.settings.mmdc);
@@ -991,7 +993,8 @@ export default class Specd extends View {
           owner: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? this.ownerProps() : null, approveBlock: approveBlock(this.spec.state), approving: this.approving, approveLabel: this.spec.state.phase === "plan" ? "Approve plan" : "Approve spec", onApprove: this.spec.state.phase === "spec" || this.spec.state.phase === "plan" ? (cx) => this.approve(cx) : null,
           onSkip: this.spec.state.phase === "spec" ? (mode, cx) => this.skip(mode, cx) : null,
           planCheck: this.spec.state.phase === "plan" && this.spec.doc != null ? planNote(this.spec.doc, this.spec.state.paths.spec) : null, onJump: (i, cx) => this.jump(i, cx) },
-        diagrams: { store: this.diagrams, availW: this.docW - 48, onOpen: (p, cx) => this.openZoom(p, cx),
+        layout: layoutFor(this.viewW), onViewSize: (w, cx) => { if (Math.abs(w - this.viewW) > 2) { this.viewW = w; cx.notify(); } },
+        diagrams: { store: this.diagrams, availW: this.docW - (layoutFor(this.viewW) === "narrow" ? 24 : 48), onOpen: (p, cx) => this.openZoom(p, cx),
           onSize: (w, cx) => { if (Math.abs(w - this.docW) > 4) { this.docW = w; cx.notify(); } },
           settings: { open: this.settingsOpen, onOpenChange: (o, cx) => { this.settingsOpen = o; cx.notify(); },
             mmdcInput: this.mmdcInput, puppeteerInput: this.puppeteerInput, onSave: (cx) => this.saveDiagramSettings(cx) } },

@@ -5,6 +5,7 @@ import { v_flex, h_flex, TextView } from "gpui-base";
 import { localRanges } from "../core/anchors.js";
 import { sidePanel } from "./side.js";
 import { diagram, settingsPopover } from "./diagram.js";
+import { reviewColumns } from "../core/width.js";
 
 // "#rgb" / "#rrggbb" -> "#rrggbb" + alpha byte.
 export function alpha(color, a) {
@@ -25,11 +26,14 @@ function piece(p, i, { t, pending, sel, onSelect, last }) {
 }
 
 // A piece with a margin mark beside it when its section is new or changed.
-function marked(el, status, t, i) {
+// Narrow: the mark sits above the piece instead of in a 64px column.
+function marked(el, status, t, i, narrow) {
   if (!MARK[status]) return el;
   const color = status === "new" ? t.accent : t.working;
+  const mark = div().id(`mark-${i}`).text_size(10).font_semibold().text_color(color).child(MARK[status]);
+  if (narrow) return v_flex().w_full().min_w(0).gap(2).child(mark).child(div().w_full().min_w(0).child(el));
   return h_flex().w_full().min_w(0).gap(8).items_start()
-    .child(div().id(`mark-${i}`).w(64).flex_none().text_size(10).font_semibold().text_color(color).child(MARK[status]))
+    .child(mark.w(64).flex_none())
     .child(div().flex_1().min_w(0).child(el));
 }
 
@@ -48,13 +52,14 @@ function changedToggle({ t, changes, changedOnly, onToggleChanged }) {
     .on_click((_e, cx) => onToggleChanged(cx)).child(`Changed only · ${n}`);
 }
 
-export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comments, diagrams, changes, changedOnly, onToggleChanged }) {
+export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comments, diagrams, changes, changedOnly, onToggleChanged, layout = "wide", onViewSize }) {
   const s = spec.state;
-  const header = h_flex().gap(12).px(24).py(10).items_center().border_b_1().border_color(t.border)
+  const narrow = layout === "narrow";
+  const header = h_flex().gap(narrow ? 8 : 12).px(narrow ? 12 : 24).py(10).items_center().flex_wrap().border_b_1().border_color(t.border)
     .child(div().id("back").text_size(13).text_color(t.muted).cursor_pointer()
       .hover((e) => e.text_color(t.foreground)).on_click((_e, cx) => onBack(cx)).child("‹ Specs"))
-    .child(div().text_size(14).font_semibold().child(s.id))
-    .child(div().text_size(12).text_color(t.muted).child(`${s.phase} · ${s.status} · round ${s.round}`))
+    .child(div().text_size(14).font_semibold().min_w(0).truncate().child(s.id))
+    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(`${s.phase} · ${s.status} · round ${s.round}`))
     .child(div().flex_1())
     .children([changedToggle({ t, changes, changedOnly, onToggleChanged })].filter(Boolean))
     .child(settingsPopover({ t, ...diagrams.settings }));
@@ -67,18 +72,21 @@ export function documentView({ t, spec, doc, pieces, scroll, error, onBack, comm
     const ctx = { t, pending: s.pending, sel: comments.sel, onSelect: comments.onSelect, last };
     const shown = pieces.map((p, i) => [p, i, changes ? changes.statusAt(p.start) : "unchanged"])
       .filter(([, , st]) => !(changes && changedOnly && st === "unchanged"));
-    const text = v_flex().id("doc").flex_1().min_w(0).min_h(0).overflow_y_scrollbar().track_scroll(scroll).px(24).py(16).gap(6)
+    const text = v_flex().id("doc").flex_1().min_w(0).min_h(0).overflow_y_scrollbar().track_scroll(scroll).px(narrow ? 12 : 24).py(16).gap(6)
       .on_size_change((size, cx) => diagrams.onSize(size.width / (Number(settings().zoom) || 1), cx))
       .children(shown.length ? shown.map(([p, i, st]) => marked(p.kind === "mermaid"
         ? diagram({ t, i, code: p.code, pic: diagrams.store.pic(p.code), missing: diagrams.store.missing,
           showInstall: i === firstDiagram, availW: diagrams.availW, onOpen: diagrams.onOpen })
-        : piece(p, i, ctx), st, t, i)) : [div().text_size(13).text_color(t.muted).child("Nothing changed since the last round.")]);
+        : piece(p, i, ctx), st, t, i, narrow)) : [div().text_size(13).text_color(t.muted).child("Nothing changed since the last round.")]);
     const notes = [...(comments.planCheck?.errors ?? []).map((m) => [m, t.blocked]), ...(comments.planCheck?.warnings ?? []).map((m) => [m, t.working])];
     const removedEl = removedBanner({ t, removed: changes?.removed });
     const banner = notes.length ? v_flex().gap(2).px(24).py(8).border_b_1().border_color(t.border)
       .children(notes.map(([m, c]) => div().text_size(12).text_color(c).whitespace_normal().child(m))) : null;
     const main = v_flex().flex_1().min_w(0).h_full().children([...(removedEl ? [removedEl] : []), ...(banner ? [banner] : []), text]);
-    body = h_flex().flex_1().min_h(0).child(main).child(sidePanel({ t, pending: s.pending, status: s.status, ...comments }));
+    const side = sidePanel({ t, pending: s.pending, status: s.status, narrow, ...comments });
+    const { direction } = reviewColumns(layout);
+    body = (direction === "column" ? v_flex() : h_flex()).flex_1().min_h(0).min_w(0).child(main).child(side);
   }
-  return v_flex().size_full().bg(t.background).child(header).child(body);
+  const root = v_flex().id("review").size_full().min_w(0).bg(t.background).child(header).child(body);
+  return onViewSize ? root.on_size_change((size, cx) => onViewSize(size.width / (Number(settings().zoom) || 1), cx)) : root;
 }
