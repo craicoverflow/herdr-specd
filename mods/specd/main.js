@@ -298,6 +298,7 @@ export default class Specd extends View {
     const text = this.agentInputs[role][scope].value();
     try {
       if (scope === "user") saveUserInstructions(role, text);
+      else if (!this.folder) throw new Error("no folder is open.");
       else this.agentCfg = await saveFolderInstructions(this.folder, role, text === "" ? undefined : text, this.agentCfg);
       status.error = null;
       status.saved = true;
@@ -321,6 +322,7 @@ export default class Specd extends View {
   async setFolderKey(role, value, cx) {
     const status = this.agentStatus[role];
     try {
+      if (!this.folder) throw new Error("no folder is open.");
       this.agentCfg = await saveFolderInstructions(this.folder, role, value, this.agentCfg);
       this.agentLoading = true;
       try { this.agentInputs[role].folder.set_value(""); } finally { this.agentLoading = false; }
