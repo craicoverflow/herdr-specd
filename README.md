@@ -111,7 +111,8 @@ cp -R herdr-specd/examples/checkout ~/checkout-demo && cd ~/checkout-demo
 for r in api web; do mkdir -p $r && git -C $r init -q && git -C $r commit -q --allow-empty -m init; done
 ```
 
-Open **specd: Open** from a terminal in `~/checkout-demo`: `SHOP-42` shows under Found. Click
+Open a terminal tab in `~/checkout-demo` (specd uses the focused terminal's folder), then run
+**specd: Open**: `SHOP-42` shows under Found. Click
 **Adopt**, comment on a few lines, and **Approve plan** to see the dispatch preview (nothing is
 created until you click **Confirm**).
 

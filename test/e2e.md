@@ -148,3 +148,35 @@ person's other spaces): `layout-hero.png`, `specd-panel-list.png`, `review-510px
 - `node --test test/` has one failure that depends on the live `~/.config/herdr-app/layouts/shepherdr.json`
   (`sizes, sidebar and tabs match shepherdr.json`): the person's file has an extra run-time block
   (`tasks-thread-term`) that the comparison doesn't ignore. Not caused by this work.
+
+### Docs run-through, 2026-11-28 (HS2-18)
+
+Followed the README quick start and each guide as written. Install and uninstall ran against a copy of
+`~/.config/herdr-app` (scratch home under `$HOME`, `HERDR_APP_HOME` set, specd's own files removed from it
+first). The UI steps ran in the live window with the current copy installed, then the backup was put back.
+The repo folder stood in for the `git clone` step.
+
+- README quick start, `sh scripts/link.sh` → matched (three `copied` lines and the note).
+- README quick start, `layout.switch specd` → matched live (layout `specd`, Specs list in the panel);
+  with the scratch home it says "no Herdr window at …/herdr-app.sock", as it has no window. **Fixed:** install
+  guide now says to leave `HERDR_APP_HOME` unset for live steps.
+- install 1, `herdr-app check` → matched (`check passed`). Mod loaded in the live window, `errors` empty.
+- install 2, panel shows Specs list, New spec…, Adopt spec…, Settings → matched
+  (the panel icons were not clicked: `layout.select` was used).
+- install 3, agent opens in Terminal → matched earlier in L6; not repeated.
+- install 4, switch back → matched (`shepherdr` restored, `errors` empty).
+- install 6, `link.sh --remove` → matched (one `removed` line each for `specd.json`, `specd.svg`, `mods/specd`;
+  none for `pane-specd`, which wasn't there); a second run printed nothing and exited 0.
+- install 5 (update), troubleshooting "layout isn't listed" (`ls`, `json.tool`) → matched in the scratch home.
+- README "Try it on the example" → **fixed:** said "from a terminal in `~/checkout-demo`" but specd uses the
+  focused terminal's folder and a palette/tab open in the specd layout shows the panel for that folder, so
+  the step now says to open a terminal tab there first. Adopt, comment, Approve plan, Confirm: not done
+  (need clicks and typing; `herdr-app do` has none).
+- review 1 (open), dispatch 2 and agents 1/3/4 → matched in L2, L9, L11 earlier; not repeated live.
+- review 2 to 7, dispatch 1 and 3, agents 2 and 5: **not followed**: need typing, clicks or a real agent
+  (Confirm creates real tasks). Their text stays marked ○.
+- Installing then removing: `layouts/` and `mods/` file hashes in the scratch home identical before and
+  after (1345 files). Herdr's `herdr-core/templates` unchanged (script never touches them).
+- Real home after the live checks: same hashes for `layouts/`, `mods/` and templates, except Herdr's own
+  run-time `layouts/.state/*.json`, which Herdr rewrites when a layout is switched. Scratch home,
+  `~/specd-e2e-docs` and backups deleted.
