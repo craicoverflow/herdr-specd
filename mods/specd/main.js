@@ -948,6 +948,9 @@ export default class Specd extends View {
     }
   }
 
+  // The width rule every view reads: the layout now, and the hook that keeps viewW current.
+  fit() { return { layout: layoutFor(this.viewW), onViewSize: (w, cx) => { if (Math.abs(w - this.viewW) > 2) { this.viewW = w; cx.notify(); } } }; }
+
   render(_cx) {
     const t = theme();
     if (this.handedOff) return div().size_full().p(16).bg(t.background).text_color(t.muted ?? t.foreground).child("specd opens in the panel");
@@ -957,24 +960,24 @@ export default class Specd extends View {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         newView({ t, form: this.creating, inputs: this.newInputs, error: this.newError, busy: this.newBusy,
           onChangeFolder: (cx) => this.changeNewFolder(cx), onOpenUsed: (id, cx) => this.openUsed(id, cx),
-          onStart: (cx) => this.startNew(cx), onCancel: (cx) => { this.creating = null; this.newError = null; cx.notify(); } }));
+          onStart: (cx) => this.startNew(cx), onCancel: (cx) => { this.creating = null; this.newError = null; cx.notify(); }, ...this.fit() }));
     }
     if (this.adopting) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         adoptView({ t, form: this.adopting, input: this.adoptInput, error: this.adoptError,
           onPick: (k, cx) => this.pickAdopt(k, cx), onClear: (k, cx) => this.clearAdopt(k, cx),
-          onSubmit: (cx) => this.submitAdopt(cx), onCancel: (cx) => { this.adopting = null; this.adoptError = null; cx.notify(); } }));
+          onSubmit: (cx) => this.submitAdopt(cx), onCancel: (cx) => { this.adopting = null; this.adoptError = null; cx.notify(); }, ...this.fit() }));
     }
     if (this.selected == null) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
-        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }) }));
+        list({ t, specs: this.specs, errors: this.errors, found: this.found, onFoundAdopt: (f, cx) => this.adoptFound(f, cx), onFoundDismiss: (f, cx) => this.dismissFound(f, cx), onAdopt: (cx) => this.startAdopt(cx), onNew: (cx) => this.startNewForm(cx), onOpen: (id, cx) => cx.spawn(async (cx) => { await this.open(id); cx.notify(); }), ...this.fit() }));
     }
     if (this.dispatching && this.spec) {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         dispatchView({ t, d: this.dispatching, created: this.spec.state.dispatch?.created, noteInput: this.noteInput,
           onConfirm: (cx) => this.confirmDispatch(cx), onToggle: (cx) => this.toggleDispatchReview(cx),
           owner: this.ownerPick ? this.ownerProps("plan") : null, onSendToPlan: (cx) => this.sendErrorsToPlan(cx), onRetry: (cx) => this.openDispatch(cx, { force: true }),
-          onAskAgain: (cx) => this.askAgain(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); } }));
+          onAskAgain: (cx) => this.askAgain(cx), onClose: (cx) => { this.dispatching = null; cx.notify(); }, ...this.fit() }));
     }
     if (!this.spec) {
       return div().size_full().p(16).bg(t.background).text_color(t.muted).child(this.error ?? "Loading…");
@@ -982,7 +985,7 @@ export default class Specd extends View {
     if (this.spec.state.phase === "build") {
       return div().size_full().bg(t.background).text_color(t.foreground).child(
         buildView({ t, id: this.spec.state.id, build: this.build, copied: this.copied, onCopy: (r, cx) => this.copyRef(r, cx),
-          onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }) }));
+          onBack: (cx) => cx.spawn(async (cx) => { await this.back(); cx.notify(); }), ...this.fit() }));
     }
     return div().size_full().bg(t.background).text_color(t.foreground).child(
       documentView({ t, spec: this.spec, doc: this.spec.doc, pieces: this.pieces, scroll: this.scroll, error: this.error,

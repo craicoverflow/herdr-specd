@@ -351,3 +351,35 @@ test("the review renders at narrow and wide widths without throwing", async () =
     assert.doesNotThrow(() => v.render(cx), String(w));
   }
 });
+
+test("every view renders at 280, 510 and 900px without throwing", async () => {
+  const dir = folder("all-widths", { files: TICKET });
+  await F.adoptFiles(dir, { id: "ALL-1", spec: `${dir}/PROJ-123.md` });
+  const v = await open(dir, "ALL-1", noModel);
+  await settle(); // init's own reload may still hold the lock when open() ran
+  if (!v.spec) await v.open("ALL-1");
+  assert.ok(v.spec, String(v.error));
+  const widths = [280, 510, 900];
+  const at = (name, w) => assert.doesNotThrow(() => v.render(cx), `${name} at ${w}`);
+
+  // The dispatch preview (after Skip planning), then the build view once it is dispatched.
+  await step(v, () => v.skip("single", cx));
+  for (const w of widths) { v.viewW = w; at("dispatch preview", w); }
+  await step(v, () => v.confirmDispatch(cx));
+  for (const w of widths) { v.viewW = w; at("dispatch finished", w); }
+  v.dispatching = null;
+  await v.pollBuild();
+  for (const w of widths) { v.viewW = w; at("build", w); }
+
+  // The list, with a found spec, then the two forms.
+  await v.back();
+  v.found = [{ path: "docs/ABC-7-export.md", id: "ABC-7" }];
+  for (const w of widths) { v.viewW = w; at("list", w); }
+  await step(v, () => v.startNewForm(cx));
+  for (const w of widths) { v.viewW = w; at("new spec form", w); }
+  v.newError = { message: "PROJ-123 is already used", usedId: "ALL-1" };
+  for (const w of widths) { v.viewW = w; at("new spec form with error", w); }
+  v.creating = null;
+  await step(v, () => v.startAdopt(cx));
+  for (const w of widths) { v.viewW = w; at("adopt form", w); }
+});
